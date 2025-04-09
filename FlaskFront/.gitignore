@@ -1,0 +1,30 @@
+# Python
+__pycache__/
+*.py[cod]
+*.env
+*.venv
+env/
+venv/
+ENV/
+env.bak/
+venv.bak/
+
+# Database
+instance/
+*.db
+*.sqlite
+
+# MongoDB
+/data/db/
+mongod.log
+
+# Environment variables
+.env
+.env.local
+
+# IDE
+.vscode/
+.idea/
+
+# macOS
+.DS_Store
