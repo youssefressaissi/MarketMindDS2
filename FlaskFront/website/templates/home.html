@@ -3,5 +3,65 @@
 {% block title %}Home{% endblock %}
 
 {% block content %}
+<!-- Hero Section -->
+<section class="min-h-[80vh] flex items-center">
+  <div class="container mx-auto px-6 py-16 md:py-24 flex flex-col md:flex-row items-center gap-12">
+    <!-- Left Column - Text Content -->
+    <div class="md:w-1/2 space-y-6">
+      <h1 class="text-4xl md:text-5xl lg:text-6xl font-bold text-gray-800">
+        Transform Your Social Media Presence
+      </h1>
+      <p class="text-lg md:text-xl text-gray-600">
+        Our AI-powered platform helps you create stunning content that engages your audience and grows your brand.
+      </p>
+      <div class="flex flex-col sm:flex-row gap-4 pt-4">
+        {% if not user.is_authenticated %}
+          <a href="/login" class="px-8 py-3 bg-[#8338ec] text-white rounded-lg text-center font-medium hover:bg-[#6a2bc4] transition duration-300 shadow-lg hover:shadow-xl">
+            Join Us Now
+          </a>
+          <a href="/sign-up" class="px-8 py-3 border-2 border-[#8338ec] text-[#8338ec] rounded-lg text-center font-medium hover:bg-[#8338ec] hover:text-white transition duration-300">
+            Create Account
+          </a>
+        {% else %}
+          <a href="/dashboard" class="px-8 py-3 bg-[#8338ec] text-white rounded-lg text-center font-medium hover:bg-[#6a2bc4] transition duration-300 shadow-lg hover:shadow-xl">
+            Go to Dashboard
+          </a>
+        {% endif %}
+      </div>
+    </div>
 
+    <!-- Right Column - Image Placeholder -->
+    <div class="md:w-1/2 flex justify-center">
+      
+        <img src="{{ url_for('static', filename='images/marketmind3.png') }}" 
+             alt="MarketMind Hero Image" 
+            class="w-full">
+      
+    </div>
+  
+</section>
+
+<!-- Features Section (Optional) -->
+<section class="py-16 bg-gray-50">
+  <div class="container mx-auto px-6">
+    <h2 class="text-3xl font-bold text-center text-gray-800 mb-12">Why Choose Us</h2>
+    <div class="grid md:grid-cols-3 gap-8">
+      <!-- Feature 1 -->
+      <div class="bg-white p-6 rounded-xl shadow-md">
+        <h3 class="text-xl font-semibold mb-3">AI-Powered Content</h3>
+        <p class="text-gray-600">Generate stunning posts with our advanced AI algorithms.</p>
+      </div>
+      <!-- Feature 2 -->
+      <div class="bg-white p-6 rounded-xl shadow-md">
+        <h3 class="text-xl font-semibold mb-3">Easy Scheduling</h3>
+        <p class="text-gray-600">Plan and automate your social media calendar.</p>
+      </div>
+      <!-- Feature 3 -->
+      <div class="bg-white p-6 rounded-xl shadow-md">
+        <h3 class="text-xl font-semibold mb-3">Performance Analytics</h3>
+        <p class="text-gray-600">Track engagement and optimize your strategy.</p>
+      </div>
+    </div>
+  </div>
+</section>
 {% endblock %}
