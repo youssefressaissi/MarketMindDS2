@@ -1,0 +1,81 @@
+{% extends "base.html" %} 
+
+{% block title %}Login{% endblock %} 
+
+{% block content %}
+<div class="mx-auto block max-w-md rounded-lg bg-white p-6 shadow-lg">
+  <h3 class="mb-6 text-center text-2xl font-bold text-[#8338ec]">Login</h3>
+  <form method="POST">
+    <!-- Email input -->
+    <div class="relative mb-6">
+      <input
+        type="email"
+        class="peer block min-h-[auto] w-full rounded border border-gray-300 bg-transparent px-3 py-[0.32rem] leading-[1.6] outline-none transition-all duration-200 ease-linear focus:border-[#8338ec] focus:placeholder:opacity-100"
+        id="email"
+        name="email"
+        placeholder=" "
+        required />
+      <label
+        for="email"
+        class="pointer-events-none absolute left-3 top-0 mb-0 max-w-[90%] origin-[0_0] truncate pt-[0.37rem] leading-[1.6] text-gray-500 transition-all duration-200 ease-out peer-focus:-translate-y-[0.9rem] peer-focus:scale-[0.8] peer-focus:text-[#8338ec] peer-data-[twe-input-state-active]:-translate-y-[0.9rem] peer-data-[twe-input-state-active]:scale-[0.8] motion-reduce:transition-none"
+        >Email Address</label
+      >
+    </div>
+
+    <!-- Password input -->
+    <div class="relative mb-6">
+      <input
+        type="password"
+        class="peer block min-h-[auto] w-full rounded border border-gray-300 bg-transparent px-3 py-[0.32rem] leading-[1.6] outline-none transition-all duration-200 ease-linear focus:border-[#8338ec] focus:placeholder:opacity-100"
+        id="password"
+        name="password"
+        placeholder=" "
+        required />
+      <label
+        for="password"
+        class="pointer-events-none absolute left-3 top-0 mb-0 max-w-[90%] origin-[0_0] truncate pt-[0.37rem] leading-[1.6] text-gray-500 transition-all duration-200 ease-out peer-focus:-translate-y-[0.9rem] peer-focus:scale-[0.8] peer-focus:text-[#8338ec] peer-data-[twe-input-state-active]:-translate-y-[0.9rem] peer-data-[twe-input-state-active]:scale-[0.8] motion-reduce:transition-none"
+        >Password</label
+      >
+    </div>
+
+    <!-- Remember me & Forgot password -->
+    <div class="mb-6 flex items-center justify-between">
+      <div class="flex items-center">
+        <input
+          id="remember"
+          name="remember"
+          type="checkbox"
+          class="h-4 w-4 rounded border-gray-300 text-[#8338ec] focus:ring-[#8338ec]"
+        />
+        <label for="remember" class="ml-2 block text-sm text-gray-700">
+          Remember me
+        </label>
+      </div>
+      <div class="text-sm">
+        <a href="#" class="font-medium text-[#8338ec] hover:text-[#6a2bc4]">
+          Forgot password?
+        </a>
+      </div>
+    </div>
+
+    <!-- Submit button -->
+    <button
+      type="submit"
+      class="w-full rounded bg-[#8338ec] px-6 py-3 text-sm font-medium uppercase leading-normal text-white shadow-md transition duration-150 ease-in-out hover:bg-[#6a2bc4] hover:shadow-lg focus:bg-[#6a2bc4] focus:shadow-lg focus:outline-none focus:ring-0 active:bg-[#5a24b0] active:shadow-lg"
+      data-twe-ripple-init
+      data-twe-ripple-color="light">
+      Login
+    </button>
+
+    <!-- Sign up link -->
+    <p class="mt-6 text-center text-gray-600">
+      Don't have an account?
+      <a
+        href="/sign-up"
+        class="text-[#8338ec] hover:text-[#6a2bc4] focus:outline-none"
+        >Sign Up</a
+      >
+    </p>
+  </form>
+</div>
+{% endblock %}

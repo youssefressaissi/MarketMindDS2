@@ -1,55 +1,112 @@
+version: "3.8"
+
+# --- Base service definition for AI backends ---
 x-base_service: &base_service
     ports:
-      - "${WEBUI_PORT:-7860}:7860"
+      - "${WEBUI_PORT:-7860}:7860" # A1111/Comfy port (can be overridden by env var)
     volumes:
-      - &v1 ./data:/data
-      - &v2 ./output:/output
+      - &v1 ./data:/data         # Mount for models, configs etc.
+      - &v2 ./output:/output     # Mount for generated output
     stop_signal: SIGKILL
     tty: true
+    # Default GPU allocation for services using this base
     deploy:
       resources:
         reservations:
           devices:
               - driver: nvidia
-                device_ids: ['0']
+                device_ids: ['0'] # Use specific GPU ID '0'
                 capabilities: [compute, utility]
+    restart: unless-stopped # Good default for services
 
-name: webui-docker
+# --- Project Name ---
+name: webui-docker # Or your preferred project name like marketmind-ai
 
 services:
+  # --- NEW: Flask Application Service ---
+  flask_app:
+    build: ./Flask_app          # Path to your Flask app Dockerfile (create this folder)
+    container_name: flask_frontend # Choose a container name
+    ports:
+      - "5000:5000"             # Expose Flask app on host port 5000
+    environment:
+      # Environment variables needed by your Flask app (read these in app.py using os.environ.get)
+      - MONGO_URL=mongodb://mongo:27017/marketmind_db # Use 'mongo' service name for DB connection
+      #- MONGO_DB_NAME=marketmind_db       # Choose your database name
+      - IMAGE_API_URL=http://auto:7860    # Use 'auto' service name for A1111 API URL
+      - FLASK_SECRET_KEY=replace_with_a_real_secure_secret_key # IMPORTANT: Set a strong secret key!
+      - FLASK_ENV=development             # Set to 'production' later
+      - FLASK_DEBUG=True                # Set to 'False' or remove for production
+      # Add any other ENV VARS your Flask app needs
+    volumes:
+      # Mount your Flask code for easier development (reflects changes without rebuild)
+      - ./flask_app:/app
+    depends_on:
+      - mongo                   # Ensure Mongo is up before Flask
+      - auto                    # Ensure the default image generator 'auto' is up before Flask
+    restart: unless-stopped
+    # Add to profiles so it starts when auto or comfy are selected
+    profiles: ["auto", "comfy"]
+
+  # --- Model Download Helper Service ---
   download:
     build: ./services/download/
-    profiles: ["download"]
+    profiles: ["download"]      # Only runs if explicitly selected with --profile download
     volumes:
-      - *v1
+      - *v1                     # Shares the data volume
 
-  auto: &automatic
-    <<: *base_service
-    profiles: ["auto"]
+  # --- AUTOMATIC1111 GPU Service ---
+  auto: &automatic             # Define anchor 'automatic'
+    <<: *base_service         # Inherit from base_service (GPU, volumes, tty, etc.)
+    profiles: ["auto"]         # Runs when --profile auto is used
     build: ./services/AUTOMATIC1111
-    image: sd-auto:78
+    image: sd-auto:78          # Optional: Name the built image
     environment:
-      - CLI_ARGS=--allow-code --medvram --xformers --enable-insecure-extension-access --api
+      # API enabled, other A1111 specific flags
+      - CLI_ARGS=--allow-code --medvram --xformers --enable-insecure-extension-access --api --listen
 
+  # --- AUTOMATIC1111 CPU Service ---
   auto-cpu:
-    <<: *automatic
-    profiles: ["auto-cpu"]
-    deploy: {}
+    <<: *automatic             # Inherit from 'auto' definition
+    profiles: ["auto-cpu"]     # Runs when --profile auto-cpu is used
+    deploy: {}                 # Override deploy section to REMOVE GPU allocation
     environment:
-      - CLI_ARGS=--no-half --precision full --allow-code --enable-insecure-extension-access --api
+      # Flags suitable for CPU, API enabled
+      - CLI_ARGS=--no-half --precision full --use-cpu all --allow-code --enable-insecure-extension-access --api --listen
 
-  comfy: &comfy
-    <<: *base_service
-    profiles: ["comfy"]
+  # --- ComfyUI GPU Service ---
+  comfy: &comfy                # Define anchor 'comfy'
+    <<: *base_service         # Inherit from base_service
+    ports:
+      - "${COMFY_PORT:-8188}:8188" # Use different port for ComfyUI
+    profiles: ["comfy"]        # Runs when --profile comfy is used
     build: ./services/comfy/
-    image: sd-comfy:7
+    image: sd-comfy:7          # Optional: Name the built image
     environment:
-      - CLI_ARGS=
+      - CLI_ARGS= --listen     # ComfyUI specific flags (ensure listen for API access)
 
-
+  # --- ComfyUI CPU Service ---
   comfy-cpu:
-    <<: *comfy
-    profiles: ["comfy-cpu"]
-    deploy: {}
+    <<: *comfy                # Inherit from 'comfy' definition
+    profiles: ["comfy-cpu"]    # Runs when --profile comfy-cpu is used
+    deploy: {}                 # Override deploy section to REMOVE GPU allocation
     environment:
-      - CLI_ARGS=--cpu
+      - CLI_ARGS=--cpu         # ComfyUI CPU flag
+
+  # --- ADDED: MongoDB Service ---
+  mongo:
+    image: mongo:latest        # Use official Mongo image
+    container_name: mongo
+    ports:
+      - "27017:27017"           # Expose default Mongo port
+    volumes:
+      - mongo_data:/data/db     # Persist database data using a named volume
+    restart: unless-stopped
+
+# --- Define Named Volumes ---
+volumes:
+  mongo_data:                  # Volume for MongoDB data
+  # The 'data' and 'output' volumes are implicitly handled by the anchors (&v1, &v2)
+  # but defining them explicitly wouldn't hurt if anchors were removed:
+  # data:
+  # output:
