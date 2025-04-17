@@ -1,14 +1,127 @@
-{% extends "base.html" %} 
+{% extends "base.html" %}
 
-{% block title %}Dashboard{% endblock %} 
+{% block title %}Dashboard{% endblock %}
 
 {% block content %}
 <div class="container mx-auto px-4 py-8">
   <h1 class="text-3xl font-bold text-gray-800 mb-6">Welcome, {{ user.first_name }}!</h1>
-  <!-- Your authenticated user content goes here -->
-  <div class="bg-white rounded-lg shadow p-6">
-    <p>This is your dashboard where you'll access all the app features.</p>
-    <!-- Add your app's main content here -->
+
+  <!-- ======================================== -->
+  <!-- Ollama Prompt Generation Section       -->
+  <!-- ======================================== -->
+  <div class="bg-white rounded-lg shadow p-6 mb-8"> {# Added margin-bottom for spacing #}
+    <h2 class="text-2xl font-semibold text-gray-700 mb-4">Generate Text Prompt with Ollama</h2>
+
+    <form action="{{ url_for('views.generate_text_prompt') }}" method="POST">
+      <div class="mb-4">
+        <label for="topic" class="block text-gray-700 text-sm font-bold mb-2">
+          Enter a topic for a visual prompt:
+        </label>
+        <input type="text" id="topic" name="topic"
+               class="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline"
+               value="{{ last_topic | default('a cybernetic owl exploring a neon jungle', true) }}">
+      </div>
+      <button type="submit"
+              class="bg-blue-500 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded focus:outline-none focus:shadow-outline">
+        Generate Prompt
+      </button>
+    </form>
+
+    <!-- Display Area for Ollama Results -->
+    <div class="mt-6">
+        {% if ollama_prompt %}
+            <h3 class="text-xl font-semibold text-gray-700 mb-2">Generated Prompt:</h3>
+            <pre><code class="block bg-gray-100 p-4 rounded text-gray-800 whitespace-pre-wrap">{{ ollama_prompt }}</code></pre>
+
+             {# CORRECTED: Use data attribute to store raw prompt #}
+            <button id="use-prompt-button"
+                    data-prompt="{{ ollama_prompt }}" {# Store raw prompt here #}
+                    onclick="copyPromptToImage(this)" {# Pass the button element #}
+                    class="mt-2 bg-green-500 hover:bg-green-700 text-white font-bold py-1 px-3 rounded text-sm">
+                Use for Image Generation
+            </button>
+        {% endif %}
+
+        {% if ollama_error %}
+            <div class="mt-4 p-4 bg-red-100 border border-red-400 text-red-700 rounded" role="alert">
+                <strong class="font-bold">Error:</strong>
+                <span class="block sm:inline">{{ ollama_error }}</span>
+            </div>
+        {% endif %}
+    </div>
+    <!-- End Ollama Display Area -->
   </div>
-</div>
+  <!-- End Ollama Section -->
+
+  <!-- ======================================== -->
+  <!-- NEW Section for Image Generation       -->
+  <!-- ======================================== -->
+  <div class="bg-white rounded-lg shadow p-6">
+    <h2 class="text-2xl font-semibold text-gray-700 mb-4">Generate Image with Stable Diffusion</h2>
+
+    <form action="{{ url_for('views.generate_image') }}" method="POST">
+      <div class="mb-4">
+        <label for="image_prompt" class="block text-gray-700 text-sm font-bold mb-2">
+          Image Prompt:
+        </label>
+        {# Use textarea for potentially longer prompts #}
+        <textarea id="image_prompt" name="image_prompt" rows="3"
+                  class="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline"
+                  placeholder="Enter the visual prompt here...">{{ last_image_prompt | default('', true) }}</textarea>
+                  {# Pre-fills with last image prompt if available #}
+      </div>
+      {# Optional: Add inputs for negative prompt, steps, etc. if desired #}
+      {# Example:
+      <div class="mb-4">
+        <label for="negative_prompt" class="block text-gray-700 text-sm font-bold mb-2">Negative Prompt:</label>
+        <input type="text" id="negative_prompt" name="negative_prompt" class="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline">
+      </div>
+      #}
+      <button type="submit"
+              class="bg-purple-500 hover:bg-purple-700 text-white font-bold py-2 px-4 rounded focus:outline-none focus:shadow-outline">
+        Generate Image
+      </button>
+    </form>
+
+    <!-- Display Area for Image Results -->
+    <div class="mt-6 text-center"> {# Centered the image display #}
+        {% if generated_image_base64 %}
+            <h3 class="text-xl font-semibold text-gray-700 mb-2">Generated Image:</h3>
+            {# Display the Base64 image #}
+            <img src="data:image/png;base64,{{ generated_image_base64 }}"
+                 alt="Generated Image"
+                 class="max-w-full md:max-w-lg lg:max-w-xl mx-auto rounded border border-gray-300 shadow"> {# Added styling #}
+        {% endif %}
+
+        {% if image_error %}
+            <div class="mt-4 p-4 bg-red-100 border border-red-400 text-red-700 rounded" role="alert">
+                <strong class="font-bold">Error:</strong>
+                <span class="block sm:inline">{{ image_error }}</span>
+            </div>
+        {% endif %}
+    </div>
+    <!-- End Image Display Area -->
+
+  </div>
+  <!-- End Image Generation Section -->
+
+</div> {# End container #}
+
+{# CORRECTED: JavaScript function now reads from the data attribute #}
+<script>
+  function copyPromptToImage(buttonElement) {
+    // Get the prompt text from the button's data-prompt attribute
+    const promptText = buttonElement.getAttribute('data-prompt');
+    const imagePromptTextarea = document.getElementById('image_prompt');
+
+    if (imagePromptTextarea && promptText) {
+      // Set the textarea value directly - no complex escaping needed here
+      imagePromptTextarea.value = promptText;
+    } else if (!promptText) {
+        console.error("Prompt text is empty or data-prompt attribute missing.");
+    } else {
+        console.error("Textarea with ID 'image_prompt' not found.");
+    }
+  }
+</script>
 {% endblock %}

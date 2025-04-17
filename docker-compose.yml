@@ -1,15 +1,12 @@
-version: "3.8"
-
-# --- Base service definition for AI backends ---
+# --- Base service definition ---
 x-base_service: &base_service
-    ports:
-      - "${WEBUI_PORT:-7860}:7860" # A1111/Comfy port (can be overridden by env var)
+    # ports: # Ports are often specific, define per service unless truly common
+    #   - "${WEBUI_PORT:-7860}:7860"
     volumes:
       - &v1 ./data:/data         # Mount for models, configs etc.
       - &v2 ./output:/output     # Mount for generated output
     stop_signal: SIGKILL
     tty: true
-    # Default GPU allocation for services using this base
     deploy:
       resources:
         reservations:
@@ -17,96 +14,133 @@ x-base_service: &base_service
               - driver: nvidia
                 device_ids: ['0'] # Use specific GPU ID '0'
                 capabilities: [compute, utility]
-    restart: unless-stopped # Good default for services
+    restart: unless-stopped
+    networks: # Assign base services to the network
+      - marketmind_net
 
 # --- Project Name ---
-name: webui-docker # Or your preferred project name like marketmind-ai
+name: marketmind-ai # Renamed for clarity
 
-services:
-  # --- NEW: Flask Application Service ---
-  flask_app:
-    build: ./Flask_app          # Path to your Flask app Dockerfile (create this folder)
-    container_name: flask_frontend # Choose a container name
-    ports:
-      - "5000:5000"             # Expose Flask app on host port 5000
-    environment:
-      # Environment variables needed by your Flask app (read these in app.py using os.environ.get)
-      - MONGO_URL=mongodb://mongo:27017/marketmind_db # Use 'mongo' service name for DB connection
-      #- MONGO_DB_NAME=marketmind_db       # Choose your database name
-      - IMAGE_API_URL=http://auto:7860    # Use 'auto' service name for A1111 API URL
-      - FLASK_SECRET_KEY=replace_with_a_real_secure_secret_key # IMPORTANT: Set a strong secret key!
-      - FLASK_ENV=development             # Set to 'production' later
-      - FLASK_DEBUG=True                # Set to 'False' or remove for production
-      # Add any other ENV VARS your Flask app needs
-    volumes:
-      # Mount your Flask code for easier development (reflects changes without rebuild)
-      - ./flask_app:/app
-    depends_on:
-      - mongo                   # Ensure Mongo is up before Flask
-      - auto                    # Ensure the default image generator 'auto' is up before Flask
-    restart: unless-stopped
-    # Add to profiles so it starts when auto or comfy are selected
-    profiles: ["auto", "comfy"]
-
-  # --- Model Download Helper Service ---
-  download:
-    build: ./services/download/
-    profiles: ["download"]      # Only runs if explicitly selected with --profile download
-    volumes:
-      - *v1                     # Shares the data volume
-
-  # --- AUTOMATIC1111 GPU Service ---
-  auto: &automatic             # Define anchor 'automatic'
-    <<: *base_service         # Inherit from base_service (GPU, volumes, tty, etc.)
-    profiles: ["auto"]         # Runs when --profile auto is used
-    build: ./services/AUTOMATIC1111
-    image: sd-auto:78          # Optional: Name the built image
-    environment:
-      # API enabled, other A1111 specific flags
-      - CLI_ARGS=--allow-code --medvram --xformers --enable-insecure-extension-access --api --listen
-
-  # --- AUTOMATIC1111 CPU Service ---
-  auto-cpu:
-    <<: *automatic             # Inherit from 'auto' definition
-    profiles: ["auto-cpu"]     # Runs when --profile auto-cpu is used
-    deploy: {}                 # Override deploy section to REMOVE GPU allocation
-    environment:
-      # Flags suitable for CPU, API enabled
-      - CLI_ARGS=--no-half --precision full --use-cpu all --allow-code --enable-insecure-extension-access --api --listen
-
-  # --- ComfyUI GPU Service ---
-  comfy: &comfy                # Define anchor 'comfy'
-    <<: *base_service         # Inherit from base_service
-    ports:
-      - "${COMFY_PORT:-8188}:8188" # Use different port for ComfyUI
-    profiles: ["comfy"]        # Runs when --profile comfy is used
-    build: ./services/comfy/
-    image: sd-comfy:7          # Optional: Name the built image
-    environment:
-      - CLI_ARGS= --listen     # ComfyUI specific flags (ensure listen for API access)
-
-  # --- ComfyUI CPU Service ---
-  comfy-cpu:
-    <<: *comfy                # Inherit from 'comfy' definition
-    profiles: ["comfy-cpu"]    # Runs when --profile comfy-cpu is used
-    deploy: {}                 # Override deploy section to REMOVE GPU allocation
-    environment:
-      - CLI_ARGS=--cpu         # ComfyUI CPU flag
-
-  # --- ADDED: MongoDB Service ---
-  mongo:
-    image: mongo:latest        # Use official Mongo image
-    container_name: mongo
-    ports:
-      - "27017:27017"           # Expose default Mongo port
-    volumes:
-      - mongo_data:/data/db     # Persist database data using a named volume
-    restart: unless-stopped
+# --- Define Named Network ---
+networks:
+  marketmind_net:
+    driver: bridge
 
 # --- Define Named Volumes ---
 volumes:
   mongo_data:                  # Volume for MongoDB data
-  # The 'data' and 'output' volumes are implicitly handled by the anchors (&v1, &v2)
-  # but defining them explicitly wouldn't hurt if anchors were removed:
+  ollama_data:                 # Volume for Ollama models
+  # The 'data' and 'output' volumes can be defined here if anchors are removed
   # data:
   # output:
+
+services:
+  # --- Flask Application Service ---
+  flask_app:
+    build: ./Flask_app
+    container_name: flask_frontend
+    ports:
+      - "5003:5000"
+    environment:
+      - MONGO_URL=mongodb://mongo:27017/marketmind_db
+      - IMAGE_API_URL=http://auto:7860 # Still points to auto for image gen
+      - OLLAMA_API_URL=http://ollama:11434 # <<< ADDED: Point to Ollama service
+      - FLASK_SECRET_KEY=replace_with_a_real_secure_secret_key # IMPORTANT!
+      - FLASK_ENV=development
+      - FLASK_DEBUG=True # Use string "True" or integer 1 if needed by your app
+      - FLASK_APP=__init__:create_app # Ensure this matches your setup
+    volumes:
+      - ./Flask_app:/app
+    networks: # Assign flask_app to the network
+      - marketmind_net
+    depends_on:
+      - mongo
+      - ollama # <<< ADDED: Wait for Ollama
+      - auto # Keep if you immediately need auto, otherwise optional dependency
+    restart: unless-stopped
+    # Keep profiles if you want flask app linked to image gen profiles
+    # profiles: ["auto", "comfy"] # Or remove profiles if flask should always run
+
+  # --- Model Download Helper Service ---
+  # (Keep as is, ensure it uses the network if it needs to talk to others)
+  download:
+    build: ./services/download/
+    profiles: ["download"]
+    volumes:
+      - *v1
+    networks: # <<< ADDED: Assign to network
+      - marketmind_net
+
+  # --- AUTOMATIC1111 GPU Service ---
+  auto: &automatic
+    <<: *base_service
+    ports: # <<< ADDED: Define port here
+      - "${WEBUI_PORT:-7860}:7860"
+    profiles: ["auto"]
+    #build: ./services/AUTOMATIC1111
+    image: sha256:a6c3d38d394d926b0861c918d4bb5ecffddf6cb026d97c838837b7dffe02efe4 # Use the specific digest
+    environment:
+      - CLI_ARGS=--allow-code --medvram --xformers --enable-insecure-extension-access --api --listen
+    # networks: inherited via base_service
+
+  # --- AUTOMATIC1111 CPU Service ---
+  auto-cpu:
+    <<: *automatic
+    ports: # <<< ADDED: Define port here
+      - "${WEBUI_PORT:-7860}:7860"
+    profiles: ["auto-cpu"]
+    deploy: {} # Override deploy section to REMOVE GPU allocation
+    environment:
+      - CLI_ARGS=--no-half --precision full --use-cpu all --allow-code --enable-insecure-extension-access --api --listen
+    networks: # <<< ADDED: Explicitly add network as deploy override removed it
+      - marketmind_net
+
+  # --- ComfyUI GPU Service ---
+  comfy: &comfy
+    <<: *base_service
+    ports:
+      - "${COMFY_PORT:-8188}:8188"
+    profiles: ["comfy"]
+    build: ./services/comfy/
+    image: sd-comfy:7
+    environment:
+      - CLI_ARGS= --listen
+    # networks: inherited via base_service
+
+  # --- ComfyUI CPU Service ---
+  comfy-cpu:
+    <<: *comfy
+    ports: # <<< ADDED: Define port here
+      - "${COMFY_PORT:-8188}:8188"
+    profiles: ["comfy-cpu"]
+    deploy: {} # Override deploy section to REMOVE GPU allocation
+    environment:
+      - CLI_ARGS=--cpu
+    networks: # <<< ADDED: Explicitly add network as deploy override removed it
+      - marketmind_net
+
+  # --- MongoDB Service ---
+  mongo:
+    image: mongo:latest
+    container_name: mongo
+    ports:
+      - "27017:27017"
+    volumes:
+      - mongo_data:/data/db
+    networks: # <<< ADDED: Assign to network
+      - marketmind_net
+    restart: unless-stopped
+
+  # --- NEW: Ollama Service ---
+  ollama:
+    image: ollama/ollama:latest
+    container_name: ollama_service
+    ports:
+      # Expose only if needed for direct testing from host
+      - "11434:11434"
+    volumes:
+      # Persist models using the named volume defined above
+      - ollama_data:/root/.ollama
+    networks: # Assign to the network
+      - marketmind_net
+    restart: unless-stopped
