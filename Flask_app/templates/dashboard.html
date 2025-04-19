@@ -3,119 +3,188 @@
 {% block title %}Dashboard{% endblock %}
 
 {% block content %}
-<div class="container mx-auto px-4 py-8">
-  <h1 class="text-3xl font-bold text-gray-800 mb-6">Welcome, {{ user.first_name }}!</h1>
+<div class="flex h-[calc(100vh-4rem)]"> {# Use Flexbox for layout #}
 
   <!-- ======================================== -->
-  <!-- Ollama Prompt Generation Section       -->
+  <!-- Sidebar Section                        -->
   <!-- ======================================== -->
-  <div class="bg-white rounded-lg shadow p-6 mb-8"> {# Added margin-bottom for spacing #}
-    <h2 class="text-2xl font-semibold text-gray-700 mb-4">Generate Text Prompt with Ollama</h2>
+  <div class="w-64 bg-gray-100 p-4 border-r border-gray-300 overflow-y-auto flex flex-col">
+    <h2 class="text-xl font-semibold text-gray-700 mb-4 border-b pb-2">Businesses</h2>
+    {# Button for New Chat - Links to dashboard without ID #}
+    <a href="{{ url_for('views.dashboard') }}"
+       class="block w-full bg-blue-500 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded focus:outline-none focus:shadow-outline text-center mb-4 text-sm">
+       + New Business !
+    </a>
+    {# List of Existing Conversations #}
+    <div class="flex-grow space-y-2">
+      {% if all_conversations %}
+        {% for convo in all_conversations %}
+          <a href="{{ url_for('views.dashboard', conversation_id=convo._id) }}"
+             class="block p-2 rounded hover:bg-gray-200 text-sm truncate
+                    {% if active_conversation_id and convo._id|string == active_conversation_id %} bg-gray-300 font-semibold {% endif %}">
+             {{ convo.title | default('Untitled Chat', true) }}
+          </a>
+        {% endfor %}
+      {% else %}
+        <p class="text-gray-500 italic text-sm">No businesses yet.</p>
+      {% endif %}
+    </div>
+  </div>
+  <!-- End Sidebar Section -->
 
-    <form action="{{ url_for('views.generate_text_prompt') }}" method="POST">
-      <div class="mb-4">
-        <label for="topic" class="block text-gray-700 text-sm font-bold mb-2">
-          Enter a topic for a visual prompt:
-        </label>
-        <input type="text" id="topic" name="topic"
-               class="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline"
-               value="{{ last_topic | default('a cybernetic owl exploring a neon jungle', true) }}">
-      </div>
-      <button type="submit"
-              class="bg-blue-500 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded focus:outline-none focus:shadow-outline">
-        Generate Prompt
-      </button>
-    </form>
 
-    <!-- Display Area for Ollama Results -->
-    <div class="mt-6">
-        {% if ollama_prompt %}
-            <h3 class="text-xl font-semibold text-gray-700 mb-2">Generated Prompt:</h3>
-            <pre><code class="block bg-gray-100 p-4 rounded text-gray-800 whitespace-pre-wrap">{{ ollama_prompt }}</code></pre>
-
-             {# CORRECTED: Use data attribute to store raw prompt #}
-            <button id="use-prompt-button"
-                    data-prompt="{{ ollama_prompt }}" {# Store raw prompt here #}
-                    onclick="copyPromptToImage(this)" {# Pass the button element #}
-                    class="mt-2 bg-green-500 hover:bg-green-700 text-white font-bold py-1 px-3 rounded text-sm">
-                Use for Image Generation
-            </button>
+  <!-- ======================================== -->
+  <!-- Main Chat/Content Area                -->
+  <!-- ======================================== -->
+  <div class="flex-1 p-6 flex flex-col overflow-y-hidden">
+    <h1 class="text-3xl font-bold text-gray-800 mb-4 flex-shrink-0">
+        {% if active_conversation_id %}
+             Chat: {{ chat_history[0].content[:40] + '...' if chat_history and chat_history[0].content|length > 40 else (chat_history[0].content if chat_history else 'Selected Chat') }}
+        {% else %}
+            Welcome, {{ user.first_name }}!
         {% endif %}
+    </h1>
 
-        {% if ollama_error %}
-            <div class="mt-4 p-4 bg-red-100 border border-red-400 text-red-700 rounded" role="alert">
-                <strong class="font-bold">Error:</strong>
-                <span class="block sm:inline">{{ ollama_error }}</span>
+    {# Display Flash Messages (Only show NON-image errors here now) #}
+    {% with messages = get_flashed_messages(with_categories=true) %}
+        {% if messages %}
+            <div class="flex-shrink-0 mb-4">
+            {% for category, message in messages %}
+               {# Filter out the temporary image data category if we used it #}
+               {% if category != 'generated_image' %}
+                 <div class="p-3 rounded text-sm
+                            {% if category == 'error' %} bg-red-100 border border-red-400 text-red-700
+                            {% elif category == 'success' %} bg-green-100 border border-green-400 text-green-700
+                            {% else %} bg-blue-100 border border-blue-400 text-blue-700 {% endif %}" role="alert">
+                    {{ message }}
+                 </div>
+               {% endif %}
+            {% endfor %}
             </div>
+        {% endif %}
+    {% endwith %}
+
+    {# --- Conversation History Display --- #}
+    <div class="flex-grow space-y-3 mb-4 overflow-y-auto bg-white p-3 rounded border border-gray-200 shadow-inner">
+        {# ... (History display loop remains the same as previous version) ... #}
+         <h3 class="text-lg font-semibold text-gray-600 mb-3 border-b pb-1">Conversation:</h3>
+        {% if chat_history %}
+            {% for message in chat_history %}
+                {% if message.role == 'user' %}
+                    {# User message styling #}
+                    <div class="flex justify-end">
+                         <div class="bg-blue-100 text-blue-900 rounded-lg py-2 px-4 max-w-prose shadow-sm">
+                             <p class="text-sm whitespace-pre-wrap">{{ message.content }}</p>
+                         </div>
+                    </div>
+                {% elif message.role == 'assistant' %}
+                    {# Assistant message styling #}
+                    <div class="flex justify-start">
+                         <div class="bg-gray-100 text-gray-800 rounded-lg py-2 px-4 max-w-prose shadow-sm">
+                             <p class="text-sm whitespace-pre-wrap">{{ message.content }}</p>
+                             {# Button to copy assistant response #}
+                             <div class="mt-1 text-right">
+                                 <button data-prompt="{{ message.content }}" {# Store this specific response #}
+                                         onclick="copyPromptToImage(this)"
+                                         class="bg-green-500 hover:bg-green-700 text-white font-bold py-1 px-3 rounded text-xs opacity-75 hover:opacity-100">
+                                     Use for Image
+                                 </button>
+                             </div>
+                         </div>
+                     </div>
+                {% endif %}
+            {% endfor %}
+        {% else %}
+             <p class="text-gray-500 italic text-sm text-center py-4">
+                {% if active_conversation_id %}
+                    No messages in this conversation yet. Send one below!
+                {% else %}
+                    Select a conversation from the sidebar or start a new chat below!
+                {% endif %}
+            </p>
         {% endif %}
     </div>
-    <!-- End Ollama Display Area -->
-  </div>
-  <!-- End Ollama Section -->
+    {# --- End History Display --- #}
 
-  <!-- ======================================== -->
-  <!-- NEW Section for Image Generation       -->
-  <!-- ======================================== -->
-  <div class="bg-white rounded-lg shadow p-6">
-    <h2 class="text-2xl font-semibold text-gray-700 mb-4">Generate Image with Stable Diffusion</h2>
-
-    <form action="{{ url_for('views.generate_image') }}" method="POST">
-      <div class="mb-4">
-        <label for="image_prompt" class="block text-gray-700 text-sm font-bold mb-2">
-          Image Prompt:
-        </label>
-        {# Use textarea for potentially longer prompts #}
-        <textarea id="image_prompt" name="image_prompt" rows="3"
-                  class="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline"
-                  placeholder="Enter the visual prompt here...">{{ last_image_prompt | default('', true) }}</textarea>
-                  {# Pre-fills with last image prompt if available #}
-      </div>
-      {# Optional: Add inputs for negative prompt, steps, etc. if desired #}
-      {# Example:
-      <div class="mb-4">
-        <label for="negative_prompt" class="block text-gray-700 text-sm font-bold mb-2">Negative Prompt:</label>
-        <input type="text" id="negative_prompt" name="negative_prompt" class="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline">
-      </div>
-      #}
-      <button type="submit"
-              class="bg-purple-500 hover:bg-purple-700 text-white font-bold py-2 px-4 rounded focus:outline-none focus:shadow-outline">
-        Generate Image
-      </button>
-    </form>
-
-    <!-- Display Area for Image Results -->
-    <div class="mt-6 text-center"> {# Centered the image display #}
-        {% if generated_image_base64 %}
-            <h3 class="text-xl font-semibold text-gray-700 mb-2">Generated Image:</h3>
-            {# Display the Base64 image #}
-            <img src="data:image/png;base64,{{ generated_image_base64 }}"
-                 alt="Generated Image"
-                 class="max-w-full md:max-w-lg lg:max-w-xl mx-auto rounded border border-gray-300 shadow"> {# Added styling #}
-        {% endif %}
-
-        {% if image_error %}
-            <div class="mt-4 p-4 bg-red-100 border border-red-400 text-red-700 rounded" role="alert">
-                <strong class="font-bold">Error:</strong>
-                <span class="block sm:inline">{{ image_error }}</span>
+    {# --- Input Form for Chat --- #}
+    <div class="flex-shrink-0">
+        <form action="{{ url_for('views.generate_text_prompt') }}" method="POST">
+            <input type="hidden" name="conversation_id" value="{{ active_conversation_id | default('', true) }}">
+            <input type="hidden" name="image_prompt" value="{{ last_image_prompt | default('', true) }}">
+            <div class="mb-2">
+                <label for="topic" class="sr-only">Your Message:</label>
+                <textarea id="topic" name="topic" rows="2" required
+                   class="shadow-sm appearance-none border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                   placeholder="Send a message..."
+                   ></textarea>
             </div>
-        {% endif %}
+            <button type="submit"
+                    class="w-full bg-blue-500 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded focus:outline-none focus:shadow-outline">
+                Send Message
+            </button>
+        </form>
+    </div>
+    {# --- End Input Form --- #}
+
+  </div>
+  <!-- End Main Chat/Content Area -->
+
+
+  <!-- ======================================== -->
+  <!-- Image Generation Panel                 -->
+  <!-- ======================================== -->
+   <div class="w-80 bg-gray-50 p-4 border-l border-gray-300 overflow-y-auto flex flex-col flex-shrink-0">
+     <h2 class="text-xl font-semibold text-gray-700 mb-4 border-b pb-2">Image Generation</h2>
+     <form action="{{ url_for('views.generate_image') }}" method="POST">
+        <input type="hidden" name="conversation_id" value="{{ active_conversation_id | default('', true) }}">
+        <input type="hidden" name="topic" value="{{ last_topic | default('', true) }}"> {# Pass topic back too #}
+
+        <div class="mb-4">
+            <label for="image_prompt" class="block text-gray-700 text-sm font-bold mb-2">
+              Image Prompt:
+            </label>
+            <textarea id="image_prompt" name="image_prompt" rows="4" required
+                      class="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline"
+                      placeholder="Enter visual prompt..."
+                      >{{ last_image_prompt | default('', true) }}</textarea>
+        </div>
+        <button type="submit"
+                class="w-full bg-purple-500 hover:bg-purple-700 text-white font-bold py-2 px-4 rounded focus:outline-none focus:shadow-outline">
+          Generate Image
+        </button>
+     </form>
+     <!-- Display Area for Image Results -->
+     <div class="mt-6 text-center flex-grow">
+         {# Display image directly from the context passed by generate_image #}
+         {% if generated_image_base64 %}
+             <h3 class="text-lg font-semibold text-gray-700 mb-2">Generated Image:</h3>
+             <img src="data:image/png;base64,{{ generated_image_base64 }}"
+                  alt="Generated Image"
+                  class="max-w-full mx-auto rounded border border-gray-300 shadow mb-4">
+         {% else %}
+              <p class="text-gray-500 italic text-sm">Image will appear here.</p>
+         {% endif %}
+
+         {# Display image error directly from context #}
+         {% if image_error %}
+             <div class="mt-4 p-4 bg-red-100 border border-red-400 text-red-700 rounded" role="alert">
+                 <strong class="font-bold">Error:</strong>
+                 <span class="block sm:inline">{{ image_error }}</span>
+             </div>
+         {% endif %}
     </div>
     <!-- End Image Display Area -->
-
   </div>
-  <!-- End Image Generation Section -->
+  <!-- End Image Generation Panel -->
 
-</div> {# End container #}
+</div> {# End Flex container #}
 
-{# CORRECTED: JavaScript function now reads from the data attribute #}
+{# --- JavaScript function remains the same --- #}
 <script>
-  function copyPromptToImage(buttonElement) {
-    // Get the prompt text from the button's data-prompt attribute
+ function copyPromptToImage(buttonElement) {
     const promptText = buttonElement.getAttribute('data-prompt');
     const imagePromptTextarea = document.getElementById('image_prompt');
-
     if (imagePromptTextarea && promptText) {
-      // Set the textarea value directly - no complex escaping needed here
       imagePromptTextarea.value = promptText;
     } else if (!promptText) {
         console.error("Prompt text is empty or data-prompt attribute missing.");
