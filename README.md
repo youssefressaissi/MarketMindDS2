@@ -1,12 +1,5 @@
-===== Page 1 =====
-
 MarketMind AI: Multi-LLM Platform for Digital Marketing
 
-BUR-ACE
-
-CONFERENCE DES
-
-===== Page 2 =====
 
 GENERAL SCOPE OF THE PROJECT
 
@@ -15,13 +8,10 @@ II- Key Features
 III- Technical Architecture
 IV- Setup & Usage
 
-===== Page 3 =====
 
 I- Overview
 
 MarketMind AI is a multi-LLM platform designed to empower small businesses with AI-driven digital marketing solutions.
-
-===== Page 4 =====
 
 II- Key Features
 
@@ -33,13 +23,7 @@ II- Key Features
 
 ---
 
-4
-
-===== Page 5 =====
-
 III- Technical Architecture
-
-===== Page 6 =====
 
 Core Components:
 
@@ -56,10 +40,6 @@ Core Components:
    - Client-specific REST APIs
 
 ---
-
-6
-
-===== Page 7 =====
 
 Data Flow:
 
@@ -78,11 +58,9 @@ Data Flow:
 - Relational DB
 - LLM Containers (Ollama)
 
-===== Page 8 =====
 
 IV- Setup & Usage
 
-===== Page 9 =====
 
 Prerequisites:
 - Docker installed
@@ -96,10 +74,6 @@ Steps:
 
 ---
 
-9
-
-===== Page 10 =====
-
 Contributing:
 1. Open issue for discussion
 2. Follow coding standards
@@ -112,10 +86,6 @@ Disclaimer:
 
 ---
 
-10
-
-===== Page 11 =====
-
 Acknowledgments:
 - Ollama for LLM deployment
 - Docker for containerization
@@ -123,12 +93,4 @@ Acknowledgments:
 
 Contact:
 support@marketmindai.com
-www.marketmindai.com
-
-===== Page 12 =====
-
-END OF DOCUMENT
-
-MarketMind AI
-12
 www.marketmindai.com
