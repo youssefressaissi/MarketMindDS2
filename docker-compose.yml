@@ -1,169 +1,185 @@
 # --- Base service definition ---
 x-base_service: &base_service
-    # volumes are mounted for data persistence and access
     volumes:
       - &v1 ./data:/data         # Shared mount for models, configs etc.
       - &v2 ./output:/output     # Shared mount for generated output
-    stop_signal: SIGKILL         # Ensure clean shutdown signal
-    tty: true                    # Allocate a pseudo-TTY
-    deploy:                      # Default deployment includes GPU allocation
+    stop_signal: SIGKILL
+    tty: true
+    deploy:
       resources:
         reservations:
           devices:
               - driver: nvidia
                 device_ids: ['0'] # Use specific GPU ID '0' by default
                 capabilities: [compute, utility]
-    restart: unless-stopped      # Restart containers unless manually stopped
-    networks:                    # Assign base services to the network by default
+    restart: unless-stopped
+    networks:
       - marketmind_net
 
 # --- Project Name ---
-# Defines the prefix for container/network names if not explicitly set
 name: marketmind-ai
 
 # --- Define Named Network --
-# Creates a custom bridge network for inter-container communication
 networks:
   marketmind_net:
     driver: bridge
 
 # --- Define Named Volumes ---
-# Creates persistent storage areas managed by Docker
 volumes:
   mongo_data:                  # Volume for MongoDB persistent data
   ollama_data:                 # Volume for Ollama downloaded models
+  xtts_models:                 # Volume for XTTS downloaded base models (NOTE: This volume seems unused based on service definitions)
 
 # --- Service Definitions ---
 services:
 
-  # --- Flask Application Service (Frontend Backend & Orchestrator) ---
+  # --- Flask Application Service ---
   flask_app:
-    build: ./Flask_app          # Build instructions are in the ./Flask_app directory
+    build: ./Flask_app
     container_name: flask_frontend
     ports:
-      - "5003:5000"             # Map host port 5003 to container port 5000 (where Flask runs)
+      - "5003:5000"
     environment:
-      # Connection string for MongoDB service
       - MONGO_URL=mongodb://mongo:27017/marketmind_db
-      # URL for AUTOMATIC1111 API service
       - IMAGE_API_URL=http://auto:7860
-      # Base URL for Ollama API service. Ensure your Flask code reads 'OLLAMA_ENDPOINT'.
       - OLLAMA_ENDPOINT=http://ollama:11434
-      # Model name your Flask app should tell Ollama to use
-      - OLLAMA_MODEL=llama3 # Example: Replace with your desired model (e.g., mistral, llama3)
-      # --- Security & Flask Config ---
-      # IMPORTANT: Replace with a real, secure secret key! Use environment files or Docker secrets ideally.
-      - FLASK_SECRET_KEY=replace_with_a_real_secure_secret_key_e1g9h3j5k7l0
-      # Set Flask environment (development enables debug mode, production disables it)
+      - XTTS_API_URL=http://xtts-service:8020
+      - OLLAMA_MODEL=llama3
+      - FLASK_SECRET_KEY=CHANGE_THIS_TO_A_VERY_SECURE_RANDOM_STRING_NOW
       - FLASK_ENV=development
-      # Explicitly enable/disable debug mode (redundant if FLASK_ENV=development)
-      # - FLASK_DEBUG=True
-      # Entry point for Flask app (if using app factory pattern in __init__.py)
-      # - FLASK_APP=__init__:create_app
     volumes:
-      # Mount local code into container for live updates during development (optional)
       - ./Flask_app:/app
-    networks: # Ensure Flask app is on the custom network
+    networks:
       - marketmind_net
-    depends_on:                 # Start these services before starting flask_app
-      - mongo
-      - ollama
-      - auto                    # Depends on image generation service being available
+    depends_on:
+      mongo:
+        condition: service_healthy
+      ollama:
+        condition: service_started
+      auto:
+        condition: service_started
+      xtts-service:
+        condition: service_started
     restart: unless-stopped
 
-  # --- Model Download Helper Service (Optional, run via profile) ---
-  download:
-    build: ./services/download/
-    profiles: ["download"]       # Only runs if profile 'download' is activated
-    volumes:
-      - *v1                     # Mount the shared data volume (using YAML anchor)
-    networks:                   # Assign to the network
-      - marketmind_net
-
-  # --- AUTOMATIC1111 GPU Service (Run via profile) ---
-  auto: &automatic             # Define YAML anchor 'automatic'
-    <<: *base_service           # Inherit properties from base_service anchor
+  # --- AUTOMATIC1111 GPU Service (DEFAULT IMAGE GENERATION) ---
+  auto: &automatic
+    <<: *base_service
     container_name: automatic1111_gpu
     ports:
-      - "${WEBUI_PORT:-7860}:7860" # Expose A1111 port (default 7860)
-    profiles: ["auto"]           # Only runs if profile 'auto' is activated
-    # Use pre-built image digest for consistency
+      - "${WEBUI_PORT:-7860}:7860"
     image: sha256:a6c3d38d394d926b0861c918d4bb5ecffddf6cb026d97c838837b7dffe02efe4
     environment:
-      # Command line arguments for A1111 webui.py
       - CLI_ARGS=--allow-code --medvram --xformers --enable-insecure-extension-access --api --listen
-    # Networks inherited via base_service
+    # Networks inherited from base_service
 
-  # --- AUTOMATIC1111 CPU Service (Run via profile) ---
+  # --- AUTOMATIC1111 CPU Service (ALTERNATIVE) ---
   auto-cpu:
-    <<: *automatic             # Inherit properties from 'automatic' anchor
+    <<: *automatic
     container_name: automatic1111_cpu
     ports:
       - "${WEBUI_PORT:-7860}:7860"
-    profiles: ["auto-cpu"]       # Only runs if profile 'auto-cpu' is activated
-    deploy: {}                   # Override deploy section to REMOVE GPU allocation from base
+    profiles: ["auto-cpu"]       # Keep Profile - Run explicitly
+    deploy: {} # Override deploy to remove GPU allocation
     environment:
-      # Different CLI args for CPU mode
       - CLI_ARGS=--no-half --precision full --use-cpu all --skip-torch-cuda-test --allow-code --enable-insecure-extension-access --api --listen
-    networks: # Ensure network assignment as deploy override might remove inherited network
+    networks:
       - marketmind_net
 
-  # --- ComfyUI GPU Service (Run via profile) ---
-  comfy: &comfy                # Define YAML anchor 'comfy'
-    <<: *base_service           # Inherit properties from base_service anchor
+  # --- ComfyUI GPU Service (ALTERNATIVE) ---
+  comfy: &comfy
+    <<: *base_service
     container_name: comfyui_gpu
     ports:
-      - "${COMFY_PORT:-8188}:8188" # Expose ComfyUI port (default 8188)
-    profiles: ["comfy"]          # Only runs if profile 'comfy' is activated
-    build: ./services/comfy/     # Build instructions are in ./services/comfy/
-    image: sd-comfy:7            # Optional: Define image name/tag
+      - "${COMFY_PORT:-8188}:8188"
+    profiles: ["comfy"]          # Keep Profile - Run explicitly
+    build: ./services/comfy/    # Assuming this build context exists
+    image: sd-comfy:7           # Assuming this image exists or build works
     environment:
-      - CLI_ARGS= --listen       # Add listen flag for external access
-    # Networks inherited via base_service
+      - CLI_ARGS= --listen      # Example args, adjust as needed
+    # Networks and deploy (GPU) inherited from base_service
 
-  # --- ComfyUI CPU Service (Run via profile) ---
+  # --- ComfyUI CPU Service (ALTERNATIVE) ---
   comfy-cpu:
-    <<: *comfy                  # Inherit properties from 'comfy' anchor
+    <<: *comfy
     container_name: comfyui_cpu
     ports:
       - "${COMFY_PORT:-8188}:8188"
-    profiles: ["comfy-cpu"]      # Only runs if profile 'comfy-cpu' is activated
-    deploy: {}                   # Override deploy section to REMOVE GPU allocation from base
+    profiles: ["comfy-cpu"]      # Keep Profile - Run explicitly
+    deploy: {} # Override deploy to remove GPU allocation
     environment:
-      - CLI_ARGS=--cpu           # Add cpu flag
-    networks:                    # Ensure network assignment
+      - CLI_ARGS=--cpu
+    networks:
       - marketmind_net
 
   # --- MongoDB Service ---
   mongo:
-    image: mongo:latest          # Use the official MongoDB image
+    image: mongo:latest
     container_name: mongo
     ports:
-      - "27017:27017"           # Expose standard MongoDB port
+      - "27017:27017"
     volumes:
-      - mongo_data:/data/db     # Mount named volume for persistent DB data
-    networks:                   # Assign to the network
+      - mongo_data:/data/db
+    networks:
       - marketmind_net
     restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "mongosh", "--eval", "db.adminCommand('ping')"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
 
-  # --- Ollama Service (for Text Generation) ---
+  # --- Ollama Service ---
   ollama:
-    image: ollama/ollama:latest # Use the official Ollama image
+    image: ollama/ollama:latest
     container_name: ollama_service
     ports:
-      # Expose only if needed for direct testing from host, Flask uses internal network
       - "11434:11434"
     volumes:
-      # Mount named volume to persist downloaded Ollama models
-      - ollama_data:/root/.ollama
-    networks:                   # Assign to the network
+      - ollama_data:/root/.ollama # Maps named volume to Ollama's internal storage
+    networks:
       - marketmind_net
-    # Add GPU support if desired
+    deploy: # Use GPU
+      resources:
+        reservations:
+          devices:
+              - driver: nvidia
+                device_ids: ['0']
+                capabilities: [gpu]
+    restart: unless-stopped
+
+  # --- XTTS Text-to-Speech Service ---
+  xtts-service:
+    image: daswer123/xtts-api-server:latest
+    container_name: xtts_service
+    ports:
+      - "8020:8020"
+    volumes:
+      # --- IMPORTANT: Ensure these host paths contain the required files BEFORE starting! ---
+      - ./data/models/xtts:/app/models  # XTTS base model files must be here
+      - ./xtts/speakers:/app/xtts/actors       # Your speaker .wav files must be here
+      - ./xtts/output_audio:/app/output_audio # Where generated audio will be saved inside container
+    networks:
+      - marketmind_net
+    command: [
+        "python3", "-m", "xtts_api_server",
+        "-v", "v2.0.3",
+        "--port", "8020",
+        "--host", "0.0.0.0",
+        "--device", "cuda:0",
+        "--model-folder", "/app/models",
+        "--speaker-folder", "/app/speakers",
+        "--output", "/app/output_audio",
+        "--use-cache",
+        "--lowvram"
+      ]
     deploy:
       resources:
         reservations:
           devices:
               - driver: nvidia
-                device_ids: ['0'] # Use specific GPU ID '0'
+                device_ids: ['0']
                 capabilities: [gpu]
     restart: unless-stopped
+    # --- REMOVED depends_on block for 'download' ---

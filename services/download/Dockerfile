@@ -1,6 +1,16 @@
-FROM bash:alpine3.19
+FROM ubuntu:22.04
 
-RUN apk update && apk add parallel aria2
-COPY . /docker
-RUN chmod +x /docker/download.sh
-ENTRYPOINT ["/docker/download.sh"]
+# Install required packages in a single layer
+RUN apt-get update -qq && \
+    apt-get install -y -qq \
+    wget \
+    aria2 \
+    curl \
+    && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /app
+
+COPY entrypoint.sh /app/
+RUN chmod +x /app/entrypoint.sh
+
+ENTRYPOINT ["/app/entrypoint.sh"]
