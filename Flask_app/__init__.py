@@ -14,7 +14,7 @@ login_manager.login_view = 'auth.login' # Route to redirect to if login is requi
 
 # --- REMOVED reading ENV VARS at module level ---
 # Define a default model (make sure you pull this model in Ollama)
-DEFAULT_OLLAMA_MODEL = "orca-mini:latest"
+DEFAULT_OLLAMA_MODEL = "llama3:latest"
 # --- End Ollama Config ---
 
 
@@ -30,7 +30,7 @@ def create_app():
     # --- MODIFIED: Read Ollama ENV VARS and Store config INSIDE create_app ---
     ollama_api_url = os.environ.get('OLLAMA_API_URL', 'http://localhost:11434') # Read ENV VAR here
     app.config['OLLAMA_ENDPOINT'] = ollama_api_url + '/api/generate'             # Set config key here
-    app.config['OLLAMA_MODEL'] = DEFAULT_OLLAMA_MODEL                            # Set config key here
+    app.config['OLLAMA_MODEL'] = os.environ.get('OLLAMA_MODEL', DEFAULT_OLLAMA_MODEL)                            # Set config key here
     print(f"DEBUG: Reading OLLAMA_API_URL as: {ollama_api_url}")                  # Added DEBUG print
     print(f"DEBUG: Set app.config['OLLAMA_ENDPOINT'] = {app.config['OLLAMA_ENDPOINT']}") # Added DEBUG print
     # --- End Ollama App Config ---

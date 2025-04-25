@@ -1,146 +1,169 @@
 # --- Base service definition ---
 x-base_service: &base_service
-    # ports: # Ports are often specific, define per service unless truly common
-    #   - "${WEBUI_PORT:-7860}:7860"
+    # volumes are mounted for data persistence and access
     volumes:
-      - &v1 ./data:/data         # Mount for models, configs etc.
-      - &v2 ./output:/output     # Mount for generated output
-    stop_signal: SIGKILL
-    tty: true
+      - &v1 ./data:/data         # Shared mount for models, configs etc.
+      - &v2 ./output:/output     # Shared mount for generated output
+    stop_signal: SIGKILL         # Ensure clean shutdown signal
+    tty: true                    # Allocate a pseudo-TTY
+    deploy:                      # Default deployment includes GPU allocation
+      resources:
+        reservations:
+          devices:
+              - driver: nvidia
+                device_ids: ['0'] # Use specific GPU ID '0' by default
+                capabilities: [compute, utility]
+    restart: unless-stopped      # Restart containers unless manually stopped
+    networks:                    # Assign base services to the network by default
+      - marketmind_net
+
+# --- Project Name ---
+# Defines the prefix for container/network names if not explicitly set
+name: marketmind-ai
+
+# --- Define Named Network --
+# Creates a custom bridge network for inter-container communication
+networks:
+  marketmind_net:
+    driver: bridge
+
+# --- Define Named Volumes ---
+# Creates persistent storage areas managed by Docker
+volumes:
+  mongo_data:                  # Volume for MongoDB persistent data
+  ollama_data:                 # Volume for Ollama downloaded models
+
+# --- Service Definitions ---
+services:
+
+  # --- Flask Application Service (Frontend Backend & Orchestrator) ---
+  flask_app:
+    build: ./Flask_app          # Build instructions are in the ./Flask_app directory
+    container_name: flask_frontend
+    ports:
+      - "5003:5000"             # Map host port 5003 to container port 5000 (where Flask runs)
+    environment:
+      # Connection string for MongoDB service
+      - MONGO_URL=mongodb://mongo:27017/marketmind_db
+      # URL for AUTOMATIC1111 API service
+      - IMAGE_API_URL=http://auto:7860
+      # Base URL for Ollama API service. Ensure your Flask code reads 'OLLAMA_ENDPOINT'.
+      - OLLAMA_ENDPOINT=http://ollama:11434
+      # Model name your Flask app should tell Ollama to use
+      - OLLAMA_MODEL=llama3 # Example: Replace with your desired model (e.g., mistral, llama3)
+      # --- Security & Flask Config ---
+      # IMPORTANT: Replace with a real, secure secret key! Use environment files or Docker secrets ideally.
+      - FLASK_SECRET_KEY=replace_with_a_real_secure_secret_key_e1g9h3j5k7l0
+      # Set Flask environment (development enables debug mode, production disables it)
+      - FLASK_ENV=development
+      # Explicitly enable/disable debug mode (redundant if FLASK_ENV=development)
+      # - FLASK_DEBUG=True
+      # Entry point for Flask app (if using app factory pattern in __init__.py)
+      # - FLASK_APP=__init__:create_app
+    volumes:
+      # Mount local code into container for live updates during development (optional)
+      - ./Flask_app:/app
+    networks: # Ensure Flask app is on the custom network
+      - marketmind_net
+    depends_on:                 # Start these services before starting flask_app
+      - mongo
+      - ollama
+      - auto                    # Depends on image generation service being available
+    restart: unless-stopped
+
+  # --- Model Download Helper Service (Optional, run via profile) ---
+  download:
+    build: ./services/download/
+    profiles: ["download"]       # Only runs if profile 'download' is activated
+    volumes:
+      - *v1                     # Mount the shared data volume (using YAML anchor)
+    networks:                   # Assign to the network
+      - marketmind_net
+
+  # --- AUTOMATIC1111 GPU Service (Run via profile) ---
+  auto: &automatic             # Define YAML anchor 'automatic'
+    <<: *base_service           # Inherit properties from base_service anchor
+    container_name: automatic1111_gpu
+    ports:
+      - "${WEBUI_PORT:-7860}:7860" # Expose A1111 port (default 7860)
+    profiles: ["auto"]           # Only runs if profile 'auto' is activated
+    # Use pre-built image digest for consistency
+    image: sha256:a6c3d38d394d926b0861c918d4bb5ecffddf6cb026d97c838837b7dffe02efe4
+    environment:
+      # Command line arguments for A1111 webui.py
+      - CLI_ARGS=--allow-code --medvram --xformers --enable-insecure-extension-access --api --listen
+    # Networks inherited via base_service
+
+  # --- AUTOMATIC1111 CPU Service (Run via profile) ---
+  auto-cpu:
+    <<: *automatic             # Inherit properties from 'automatic' anchor
+    container_name: automatic1111_cpu
+    ports:
+      - "${WEBUI_PORT:-7860}:7860"
+    profiles: ["auto-cpu"]       # Only runs if profile 'auto-cpu' is activated
+    deploy: {}                   # Override deploy section to REMOVE GPU allocation from base
+    environment:
+      # Different CLI args for CPU mode
+      - CLI_ARGS=--no-half --precision full --use-cpu all --skip-torch-cuda-test --allow-code --enable-insecure-extension-access --api --listen
+    networks: # Ensure network assignment as deploy override might remove inherited network
+      - marketmind_net
+
+  # --- ComfyUI GPU Service (Run via profile) ---
+  comfy: &comfy                # Define YAML anchor 'comfy'
+    <<: *base_service           # Inherit properties from base_service anchor
+    container_name: comfyui_gpu
+    ports:
+      - "${COMFY_PORT:-8188}:8188" # Expose ComfyUI port (default 8188)
+    profiles: ["comfy"]          # Only runs if profile 'comfy' is activated
+    build: ./services/comfy/     # Build instructions are in ./services/comfy/
+    image: sd-comfy:7            # Optional: Define image name/tag
+    environment:
+      - CLI_ARGS= --listen       # Add listen flag for external access
+    # Networks inherited via base_service
+
+  # --- ComfyUI CPU Service (Run via profile) ---
+  comfy-cpu:
+    <<: *comfy                  # Inherit properties from 'comfy' anchor
+    container_name: comfyui_cpu
+    ports:
+      - "${COMFY_PORT:-8188}:8188"
+    profiles: ["comfy-cpu"]      # Only runs if profile 'comfy-cpu' is activated
+    deploy: {}                   # Override deploy section to REMOVE GPU allocation from base
+    environment:
+      - CLI_ARGS=--cpu           # Add cpu flag
+    networks:                    # Ensure network assignment
+      - marketmind_net
+
+  # --- MongoDB Service ---
+  mongo:
+    image: mongo:latest          # Use the official MongoDB image
+    container_name: mongo
+    ports:
+      - "27017:27017"           # Expose standard MongoDB port
+    volumes:
+      - mongo_data:/data/db     # Mount named volume for persistent DB data
+    networks:                   # Assign to the network
+      - marketmind_net
+    restart: unless-stopped
+
+  # --- Ollama Service (for Text Generation) ---
+  ollama:
+    image: ollama/ollama:latest # Use the official Ollama image
+    container_name: ollama_service
+    ports:
+      # Expose only if needed for direct testing from host, Flask uses internal network
+      - "11434:11434"
+    volumes:
+      # Mount named volume to persist downloaded Ollama models
+      - ollama_data:/root/.ollama
+    networks:                   # Assign to the network
+      - marketmind_net
+    # Add GPU support if desired
     deploy:
       resources:
         reservations:
           devices:
               - driver: nvidia
                 device_ids: ['0'] # Use specific GPU ID '0'
-                capabilities: [compute, utility]
-    restart: unless-stopped
-    networks: # Assign base services to the network
-      - marketmind_net
-
-# --- Project Name ---
-name: marketmind-ai # Renamed for clarity
-
-# --- Define Named Network ---
-networks:
-  marketmind_net:
-    driver: bridge
-
-# --- Define Named Volumes ---
-volumes:
-  mongo_data:                  # Volume for MongoDB data
-  ollama_data:                 # Volume for Ollama models
-  # The 'data' and 'output' volumes can be defined here if anchors are removed
-  # data:
-  # output:
-
-services:
-  # --- Flask Application Service ---
-  flask_app:
-    build: ./Flask_app
-    container_name: flask_frontend
-    ports:
-      - "5003:5000"
-    environment:
-      - MONGO_URL=mongodb://mongo:27017/marketmind_db
-      - IMAGE_API_URL=http://auto:7860 # Still points to auto for image gen
-      - OLLAMA_API_URL=http://ollama:11434 # <<< ADDED: Point to Ollama service
-      - FLASK_SECRET_KEY=replace_with_a_real_secure_secret_key # IMPORTANT!
-      - FLASK_ENV=development
-      - FLASK_DEBUG=True # Use string "True" or integer 1 if needed by your app
-      - FLASK_APP=__init__:create_app # Ensure this matches your setup
-    volumes:
-      - ./Flask_app:/app
-    networks: # Assign flask_app to the network
-      - marketmind_net
-    depends_on:
-      - mongo
-      - ollama # <<< ADDED: Wait for Ollama
-      - auto # Keep if you immediately need auto, otherwise optional dependency
-    restart: unless-stopped
-    # Keep profiles if you want flask app linked to image gen profiles
-    # profiles: ["auto", "comfy"] # Or remove profiles if flask should always run
-
-  # --- Model Download Helper Service ---
-  # (Keep as is, ensure it uses the network if it needs to talk to others)
-  download:
-    build: ./services/download/
-    profiles: ["download"]
-    volumes:
-      - *v1
-    networks: # <<< ADDED: Assign to network
-      - marketmind_net
-
-  # --- AUTOMATIC1111 GPU Service ---
-  auto: &automatic
-    <<: *base_service
-    ports: # <<< ADDED: Define port here
-      - "${WEBUI_PORT:-7860}:7860"
-    profiles: ["auto"]
-    #build: ./services/AUTOMATIC1111
-    image: sha256:a6c3d38d394d926b0861c918d4bb5ecffddf6cb026d97c838837b7dffe02efe4 # Use the specific digest
-    environment:
-      - CLI_ARGS=--allow-code --medvram --xformers --enable-insecure-extension-access --api --listen
-    # networks: inherited via base_service
-
-  # --- AUTOMATIC1111 CPU Service ---
-  auto-cpu:
-    <<: *automatic
-    ports: # <<< ADDED: Define port here
-      - "${WEBUI_PORT:-7860}:7860"
-    profiles: ["auto-cpu"]
-    deploy: {} # Override deploy section to REMOVE GPU allocation
-    environment:
-      - CLI_ARGS=--no-half --precision full --use-cpu all --allow-code --enable-insecure-extension-access --api --listen
-    networks: # <<< ADDED: Explicitly add network as deploy override removed it
-      - marketmind_net
-
-  # --- ComfyUI GPU Service ---
-  comfy: &comfy
-    <<: *base_service
-    ports:
-      - "${COMFY_PORT:-8188}:8188"
-    profiles: ["comfy"]
-    build: ./services/comfy/
-    image: sd-comfy:7
-    environment:
-      - CLI_ARGS= --listen
-    # networks: inherited via base_service
-
-  # --- ComfyUI CPU Service ---
-  comfy-cpu:
-    <<: *comfy
-    ports: # <<< ADDED: Define port here
-      - "${COMFY_PORT:-8188}:8188"
-    profiles: ["comfy-cpu"]
-    deploy: {} # Override deploy section to REMOVE GPU allocation
-    environment:
-      - CLI_ARGS=--cpu
-    networks: # <<< ADDED: Explicitly add network as deploy override removed it
-      - marketmind_net
-
-  # --- MongoDB Service ---
-  mongo:
-    image: mongo:latest
-    container_name: mongo
-    ports:
-      - "27017:27017"
-    volumes:
-      - mongo_data:/data/db
-    networks: # <<< ADDED: Assign to network
-      - marketmind_net
-    restart: unless-stopped
-
-  # --- NEW: Ollama Service ---
-  ollama:
-    image: ollama/ollama:latest
-    container_name: ollama_service
-    ports:
-      # Expose only if needed for direct testing from host
-      - "11434:11434"
-    volumes:
-      # Persist models using the named volume defined above
-      - ollama_data:/root/.ollama
-    networks: # Assign to the network
-      - marketmind_net
+                capabilities: [gpu]
     restart: unless-stopped

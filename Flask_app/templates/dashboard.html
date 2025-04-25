@@ -1,93 +1,113 @@
-{% extends "base.html" %}
+{% extends "base.html" %} {# Assumes you have a base.html with head, body, tailwind link etc. #}
 
-{% block title %}Dashboard{% endblock %}
+{% block title %}Dashboard - MarketMind AI{% endblock %}
 
 {% block content %}
-<div class="flex h-[calc(100vh-4rem)]"> {# Use Flexbox for layout #}
+{# Main container with specific height calculation relative to nav bar #}
+<div class="flex h-[calc(100vh-4rem)] bg-white">
 
   <!-- ======================================== -->
-  <!-- Sidebar Section                        -->
+  <!-- Sidebar Section (Businesses List)      -->
   <!-- ======================================== -->
-  <div class="w-64 bg-gray-100 p-4 border-r border-gray-300 overflow-y-auto flex flex-col">
-    <h2 class="text-xl font-semibold text-gray-700 mb-4 border-b pb-2">Businesses</h2>
-    {# Button for New Chat - Links to dashboard without ID #}
-    <a href="{{ url_for('views.dashboard') }}"
-       class="block w-full bg-blue-500 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded focus:outline-none focus:shadow-outline text-center mb-4 text-sm">
-       + New Business !
-    </a>
-    {# List of Existing Conversations #}
-    <div class="flex-grow space-y-2">
+  <aside class="w-72 flex-shrink-0 bg-slate-50 border-r border-slate-200 flex flex-col">
+    <div class="p-4 border-b border-slate-200 flex-shrink-0">
+      <h2 class="text-lg font-semibold text-slate-700">My Businesses</h2>
+    </div>
+    <div class="p-4 flex-shrink-0">
+      {# Button for New Business - improved styling #}
+      <a href="{{ url_for('views.dashboard') }}"
+         class="flex items-center justify-center w-full bg-indigo-600 hover:bg-indigo-700 text-white font-semibold py-2.5 px-4 rounded-lg focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 text-sm transition duration-150 ease-in-out shadow-sm">
+        <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+          <path stroke-linecap="round" stroke-linejoin="round" d="M12 4v16m8-8H4" />
+        </svg>
+        New Business Chat
+      </a>
+    </div>
+    {# List of Existing Conversations - improved styling #}
+    <nav class="flex-grow overflow-y-auto p-4 space-y-1 scrollbar-thin scrollbar-thumb-slate-300 scrollbar-track-slate-100">
       {% if all_conversations %}
         {% for convo in all_conversations %}
           <a href="{{ url_for('views.dashboard', conversation_id=convo._id) }}"
-             class="block p-2 rounded hover:bg-gray-200 text-sm truncate
-                    {% if active_conversation_id and convo._id|string == active_conversation_id %} bg-gray-300 font-semibold {% endif %}">
-             {{ convo.title | default('Untitled Chat', true) }}
+             class="block px-3 py-2 rounded-md text-sm font-medium truncate transition duration-150 ease-in-out
+                    {% if active_conversation_id and convo._id|string == active_conversation_id %}
+                        bg-indigo-100 text-indigo-800 hover:bg-indigo-200
+                    {% else %}
+                        text-slate-600 hover:bg-slate-200 hover:text-slate-800
+                    {% endif %}">
+             {{ convo.title | default('Untitled Business', true) }}
           </a>
         {% endfor %}
       {% else %}
-        <p class="text-gray-500 italic text-sm">No businesses yet.</p>
+        <p class="text-slate-500 italic text-sm px-3 py-2">Start your first business chat!</p>
       {% endif %}
-    </div>
-  </div>
+    </nav>
+  </aside>
   <!-- End Sidebar Section -->
 
 
   <!-- ======================================== -->
-  <!-- Main Chat/Content Area                -->
+  <!-- Main Chat/Content Area                 -->
   <!-- ======================================== -->
-  <div class="flex-1 p-6 flex flex-col overflow-y-hidden">
-    <h1 class="text-3xl font-bold text-gray-800 mb-4 flex-shrink-0">
-        {% if active_conversation_id %}
-             Chat: {{ chat_history[0].content[:40] + '...' if chat_history and chat_history[0].content|length > 40 else (chat_history[0].content if chat_history else 'Selected Chat') }}
-        {% else %}
-            Welcome, {{ user.first_name }}!
-        {% endif %}
-    </h1>
+  <main class="flex-1 flex flex-col overflow-y-hidden">
+    {# Header Area #}
+    <header class="p-4 sm:p-6 border-b border-slate-200 flex-shrink-0 bg-white">
+       <h1 class="text-xl sm:text-2xl font-semibold text-slate-800">
+           {% if active_conversation_id and chat_history %}
+                {# Show first user message as title, truncated #}
+                {{ chat_history[0].content[:50] + ('...' if chat_history[0].content|length > 50 else '') }}
+           {% elif active_conversation_id %}
+                Selected Business Chat
+           {% else %}
+               Welcome, {{ user.first_name }}! Let's Grow Your Business.
+           {% endif %}
+       </h1>
+    </header>
 
-    {# Display Flash Messages (Only show NON-image errors here now) #}
+    {# Display Flash Messages #}
     {% with messages = get_flashed_messages(with_categories=true) %}
         {% if messages %}
-            <div class="flex-shrink-0 mb-4">
+            <div class="flex-shrink-0 p-4 space-y-2 border-b border-slate-200">
             {% for category, message in messages %}
-               {# Filter out the temporary image data category if we used it #}
-               {% if category != 'generated_image' %}
-                 <div class="p-3 rounded text-sm
-                            {% if category == 'error' %} bg-red-100 border border-red-400 text-red-700
-                            {% elif category == 'success' %} bg-green-100 border border-green-400 text-green-700
-                            {% else %} bg-blue-100 border border-blue-400 text-blue-700 {% endif %}" role="alert">
+                 <div class="p-3 rounded-md text-sm shadow-sm border
+                            {% if category == 'error' %} bg-red-50 border-red-300 text-red-800
+                            {% elif category == 'success' %} bg-green-50 border-green-300 text-green-800
+                            {% else %} bg-blue-50 border-blue-300 text-blue-800 {% endif %}" role="alert">
                     {{ message }}
                  </div>
-               {% endif %}
             {% endfor %}
             </div>
         {% endif %}
     {% endwith %}
 
     {# --- Conversation History Display --- #}
-    <div class="flex-grow space-y-3 mb-4 overflow-y-auto bg-white p-3 rounded border border-gray-200 shadow-inner">
-        {# ... (History display loop remains the same as previous version) ... #}
-         <h3 class="text-lg font-semibold text-gray-600 mb-3 border-b pb-1">Conversation:</h3>
-        {% if chat_history %}
+    <div id="chat-history" class="flex-grow space-y-4 p-4 sm:p-6 overflow-y-auto bg-slate-50 scrollbar-thin scrollbar-thumb-slate-400 scrollbar-track-slate-200">
+        {% if not active_conversation_id %}
+            <div class="flex items-center justify-center h-full">
+                <p class="text-slate-500 text-center text-base">Select a business chat from the left sidebar or start a new one below.</p>
+            </div>
+        {% elif chat_history %}
             {% for message in chat_history %}
                 {% if message.role == 'user' %}
-                    {# User message styling #}
-                    <div class="flex justify-end">
-                         <div class="bg-blue-100 text-blue-900 rounded-lg py-2 px-4 max-w-prose shadow-sm">
+                    {# User message styling - aligned right #}
+                    <div class="flex justify-end group">
+                         <div class="bg-indigo-600 text-white rounded-xl rounded-br-lg py-2 px-4 max-w-lg lg:max-w-xl shadow-sm relative">
                              <p class="text-sm whitespace-pre-wrap">{{ message.content }}</p>
                          </div>
                     </div>
                 {% elif message.role == 'assistant' %}
-                    {# Assistant message styling #}
-                    <div class="flex justify-start">
-                         <div class="bg-gray-100 text-gray-800 rounded-lg py-2 px-4 max-w-prose shadow-sm">
+                    {# Assistant message styling - aligned left #}
+                    <div class="flex justify-start group">
+                         <div class="bg-white text-slate-800 rounded-xl rounded-bl-lg py-2 px-4 max-w-lg lg:max-w-xl shadow-sm border border-slate-200 relative">
                              <p class="text-sm whitespace-pre-wrap">{{ message.content }}</p>
-                             {# Button to copy assistant response #}
-                             <div class="mt-1 text-right">
-                                 <button data-prompt="{{ message.content }}" {# Store this specific response #}
+                             {# Button to copy assistant response - appears on hover over message group #}
+                             <div class="absolute -bottom-2 -right-2 opacity-0 group-hover:opacity-100 transition-opacity duration-150">
+                                 <button data-prompt="{{ message.content }}"
                                          onclick="copyPromptToImage(this)"
-                                         class="bg-green-500 hover:bg-green-700 text-white font-bold py-1 px-3 rounded text-xs opacity-75 hover:opacity-100">
-                                     Use for Image
+                                         title="Use this idea for image prompt"
+                                         class="bg-slate-200 hover:bg-slate-300 text-slate-600 font-bold p-1.5 rounded-full shadow text-xs ">
+                                      <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                                        <path stroke-linecap="round" stroke-linejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />
+                                      </svg>
                                  </button>
                              </div>
                          </div>
@@ -95,102 +115,154 @@
                 {% endif %}
             {% endfor %}
         {% else %}
-             <p class="text-gray-500 italic text-sm text-center py-4">
-                {% if active_conversation_id %}
-                    No messages in this conversation yet. Send one below!
-                {% else %}
-                    Select a conversation from the sidebar or start a new chat below!
-                {% endif %}
-            </p>
+             <div class="flex items-center justify-center h-full">
+                 <p class="text-slate-500 italic text-sm text-center">No messages in this conversation yet. Send one below!</p>
+             </div>
         {% endif %}
     </div>
     {# --- End History Display --- #}
 
-    {# --- Input Form for Chat --- #}
-    <div class="flex-shrink-0">
-        <form action="{{ url_for('views.generate_text_prompt') }}" method="POST">
+    {# --- Input Form for Chat (Ollama Text Prompt) --- #}
+    <div class="flex-shrink-0 p-4 sm:p-6 border-t border-slate-200 bg-white">
+        <form action="{{ url_for('views.generate_text_prompt') }}" method="POST" class="flex items-center space-x-3">
             <input type="hidden" name="conversation_id" value="{{ active_conversation_id | default('', true) }}">
+            {# Keep hidden fields if needed for state preservation between forms #}
             <input type="hidden" name="image_prompt" value="{{ last_image_prompt | default('', true) }}">
-            <div class="mb-2">
-                <label for="topic" class="sr-only">Your Message:</label>
-                <textarea id="topic" name="topic" rows="2" required
-                   class="shadow-sm appearance-none border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                   placeholder="Send a message..."
-                   ></textarea>
-            </div>
+
+            <label for="topic" class="sr-only">Your Message:</label>
+            <textarea id="topic" name="topic" rows="1" required {# Start with 1 row, it can grow #}
+               class="flex-grow shadow-sm appearance-none border border-slate-300 rounded-lg py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent resize-none text-sm"
+               placeholder="Ask for marketing ideas, content suggestions..."
+               >{{ last_topic | default('', true) }}</textarea>
+
             <button type="submit"
-                    class="w-full bg-blue-500 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded focus:outline-none focus:shadow-outline">
-                Send Message
+                    title="Send Message"
+                    class="flex-shrink-0 bg-indigo-600 hover:bg-indigo-700 text-white font-semibold p-2 rounded-lg focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 transition duration-150 ease-in-out shadow-sm">
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+                  <path d="M10.894 2.553a1 1 0 00-1.788 0l-7 14a1 1 0 001.169 1.409l5-1.429A1 1 0 009 15.571V11a1 1 0 112 0v4.571a1 1 0 00.725.962l5 1.428a1 1 0 001.17-1.408l-7-14z" />
+                </svg>
             </button>
         </form>
+         {# Optional: Add small print about the AI assistant's purpose #}
+         <p class="text-xs text-slate-500 mt-2 text-center">MarketMind can help brainstorm ideas. Always review suggestions.</p>
     </div>
     {# --- End Input Form --- #}
 
-  </div>
+  </main>
   <!-- End Main Chat/Content Area -->
 
 
   <!-- ======================================== -->
   <!-- Image Generation Panel                 -->
   <!-- ======================================== -->
-   <div class="w-80 bg-gray-50 p-4 border-l border-gray-300 overflow-y-auto flex flex-col flex-shrink-0">
-     <h2 class="text-xl font-semibold text-gray-700 mb-4 border-b pb-2">Image Generation</h2>
-     <form action="{{ url_for('views.generate_image') }}" method="POST">
+   <aside class="w-96 flex-shrink-0 bg-white border-l border-slate-200 overflow-y-auto flex flex-col scrollbar-thin scrollbar-thumb-slate-300 scrollbar-track-slate-100">
+     <div class="p-4 sm:p-6 border-b border-slate-200 flex-shrink-0">
+        <h2 class="text-lg font-semibold text-slate-700">Visual Generation</h2>
+     </div>
+
+     <form action="{{ url_for('views.generate_image') }}" method="POST" class="p-4 sm:p-6 flex-shrink-0">
+        {# Pass active conversation ID and last topic to maintain context #}
         <input type="hidden" name="conversation_id" value="{{ active_conversation_id | default('', true) }}">
-        <input type="hidden" name="topic" value="{{ last_topic | default('', true) }}"> {# Pass topic back too #}
+        <input type="hidden" name="topic" value="{{ last_topic | default('', true) }}">
 
         <div class="mb-4">
-            <label for="image_prompt" class="block text-gray-700 text-sm font-bold mb-2">
-              Image Prompt:
+            <label for="image_prompt" class="block text-slate-700 text-sm font-semibold mb-2">
+              Image Prompt
             </label>
             <textarea id="image_prompt" name="image_prompt" rows="4" required
-                      class="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline"
-                      placeholder="Enter visual prompt..."
+                      class="shadow-sm appearance-none border border-slate-300 rounded-lg w-full py-2 px-3 text-gray-700 text-sm leading-tight focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent resize-y"
+                      placeholder="Describe the visual you want. Use keywords for style, objects, colors, mood..."
                       >{{ last_image_prompt | default('', true) }}</textarea>
+            <p class="text-xs text-slate-500 mt-1">Tip: Use text from the chat or refine your own description.</p>
         </div>
         <button type="submit"
-                class="w-full bg-purple-500 hover:bg-purple-700 text-white font-bold py-2 px-4 rounded focus:outline-none focus:shadow-outline">
+                class="w-full bg-purple-600 hover:bg-purple-700 text-white font-semibold py-2.5 px-4 rounded-lg focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-purple-500 transition duration-150 ease-in-out shadow-sm text-sm"
+                {% if not active_conversation_id %} disabled title="Please select or start a business chat first." class="w-full bg-gray-400 text-white font-semibold py-2.5 px-4 rounded-lg cursor-not-allowed shadow-sm text-sm" {% endif %} {# Disable button if no active conversation #}
+                >
           Generate Image
         </button>
      </form>
+
      <!-- Display Area for Image Results -->
-     <div class="mt-6 text-center flex-grow">
-         {# Display image directly from the context passed by generate_image #}
+     <div class="mt-4 p-4 sm:p-6 text-center flex-grow flex flex-col border-t border-slate-200">
+         {# Display image directly from the context #}
          {% if generated_image_base64 %}
-             <h3 class="text-lg font-semibold text-gray-700 mb-2">Generated Image:</h3>
-             <img src="data:image/png;base64,{{ generated_image_base64 }}"
-                  alt="Generated Image"
-                  class="max-w-full mx-auto rounded border border-gray-300 shadow mb-4">
+             <h3 class="text-base font-semibold text-slate-700 mb-3 flex-shrink-0">Generated Visual:</h3>
+             <div class="flex-shrink-0 mb-4 bg-slate-100 p-2 rounded-lg border border-slate-200"> {# Added background and padding #}
+                 <img src="data:image/png;base64,{{ generated_image_base64 }}"
+                      alt="Generated Image"
+                      class="max-w-full h-auto mx-auto rounded shadow"> {# Removed fixed border, added shadow #}
+             </div>
+             {# Display the prompts used #}
+             <div class="text-xs text-slate-600 text-left bg-slate-100 p-3 rounded-md border border-slate-200 space-y-1 flex-shrink-0">
+                 <p><strong>Original Input:</strong><br>
+                    <code class="block bg-white p-1 rounded border text-slate-800 break-words">{{ last_image_prompt }}</code>
+                 </p>
+                 {% if last_refined_prompt and last_refined_prompt != last_image_prompt %}
+                     <p class="border-t border-slate-200 pt-1"><strong>Prompt Used:</strong><br>
+                        <code class="block bg-white p-1 rounded border text-slate-800 break-words">{{ last_refined_prompt }}</code>
+                     </p>
+                 {% endif %}
+             </div>
+
          {% else %}
-              <p class="text-gray-500 italic text-sm">Image will appear here.</p>
+              {# Placeholder message when no image is present #}
+              <div class="flex-grow flex items-center justify-center text-slate-500 italic text-sm">
+                  <p>Generated image will appear here after submission.</p>
+              </div>
          {% endif %}
 
-         {# Display image error directly from context #}
+         {# Display image generation error directly from context #}
          {% if image_error %}
-             <div class="mt-4 p-4 bg-red-100 border border-red-400 text-red-700 rounded" role="alert">
-                 <strong class="font-bold">Error:</strong>
-                 <span class="block sm:inline">{{ image_error }}</span>
+             <div class="mt-4 p-3 bg-red-50 border border-red-300 text-red-800 rounded-md text-sm flex-shrink-0" role="alert">
+                 <strong class="font-semibold">Image Generation Error:</strong>
+                 <span class="block mt-1">{{ image_error }}</span>
              </div>
          {% endif %}
     </div>
     <!-- End Image Display Area -->
-  </div>
+  </aside>
   <!-- End Image Generation Panel -->
 
-</div> {# End Flex container #}
+</div> {# End Main Flex container #}
 
-{# --- JavaScript function remains the same --- #}
+{# --- JavaScript function to copy text to image prompt --- #}
+{# This script is loaded via base.html or included here #}
 <script>
  function copyPromptToImage(buttonElement) {
     const promptText = buttonElement.getAttribute('data-prompt');
     const imagePromptTextarea = document.getElementById('image_prompt');
     if (imagePromptTextarea && promptText) {
-      imagePromptTextarea.value = promptText;
+      imagePromptTextarea.value = promptText; // Set the value
+      imagePromptTextarea.scrollTop = 0; // Scroll to top of textarea
+      imagePromptTextarea.focus(); // Focus for immediate editing
+      // Optional: Show a temporary confirmation message near the textarea
+      // E.g., create a small span, show it, then hide after 2 seconds
+      alert('Prompt copied to image input!'); // Simple alert confirmation
     } else if (!promptText) {
         console.error("Prompt text is empty or data-prompt attribute missing.");
+        alert("Could not get text from the message.");
     } else {
         console.error("Textarea with ID 'image_prompt' not found.");
+        alert("Image prompt input area not found on the page.");
     }
   }
+
+  // Function to auto-scroll chat history (optional but nice UX)
+  function scrollToBottom(elementId) {
+    const element = document.getElementById(elementId);
+    if (element) {
+      element.scrollTop = element.scrollHeight;
+    }
+  }
+
+  // Scroll chat history on initial load if needed
+  window.addEventListener('load', () => {
+      scrollToBottom('chat-history');
+  });
+
+  // If you were using HTMX or dynamically adding messages,
+  // you'd call scrollToBottom('chat-history') after adding new content.
+
 </script>
 {% endblock %}
