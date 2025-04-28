@@ -15,7 +15,7 @@ from . import mongo
 views = Blueprint('views', __name__)
 
 # --- Constants ---
-MAX_HISTORY_MESSAGES = 10
+MAX_HISTORY_MESSAGES = 1000
 CONVERSATION_TITLE_LENGTH = 40
 SUPPORTED_LANGUAGES = { # From old file - Needed for Audio
     "en": "English", "es": "Spanish", "fr": "French", "de": "German", "it": "Italian",

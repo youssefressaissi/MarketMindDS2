@@ -1,164 +1,504 @@
-{% extends "base.html" %} {# Assumes base.html has Tailwind linked #}
+{# flask_app/templates/dashboard.html #}
+{% extends "base.html" %} {# Assumes the modified base.html #}
 
 {% block title %}Dashboard - MarketMind AI{% endblock %}
 
+{# Override the entire 'content' block from base.html #}
 {% block content %}
-<div class="flex h-[calc(100vh-4rem)] bg-white"> {# Main flex container #}
+{# Main dashboard container - fills the 'main#main-content' area from base.html #}
+<div class="relative flex h-full bg-slate-50 overflow-hidden"> {# Root overflow hidden for sidebars #}
 
-  <!-- Sidebar -->
-  <aside class="w-72 flex-shrink-0 bg-slate-50 border-r border-slate-200 flex flex-col">
-    <div class="p-4 border-b border-slate-200 flex-shrink-0"> <h2 class="text-lg font-semibold text-slate-700">My Businesses</h2> </div>
-    <div class="p-4 flex-shrink-0"> <a href="{{ url_for('views.dashboard') }}" class="flex items-center justify-center w-full bg-indigo-600 hover:bg-indigo-700 text-white font-semibold py-2.5 px-4 rounded-lg focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 text-sm transition duration-150 ease-in-out shadow-sm"> <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"> <path stroke-linecap="round" stroke-linejoin="round" d="M12 4v16m8-8H4" /> </svg> New Business Chat </a> </div>
-    <nav class="flex-grow overflow-y-auto p-4 space-y-1 scrollbar-thin scrollbar-thumb-slate-300 scrollbar-track-slate-100">
-      {% if all_conversations %} {% for convo in all_conversations %} <a href="{{ url_for('views.dashboard', conversation_id=convo._id) }}" class="block px-3 py-2 rounded-md text-sm font-medium truncate transition duration-150 ease-in-out {% if active_conversation_id and convo._id|string == active_conversation_id %} bg-indigo-100 text-indigo-800 hover:bg-indigo-200 {% else %} text-slate-600 hover:bg-slate-200 hover:text-slate-800 {% endif %}"> {{ convo.title | default('Untitled Business', true) }} </a> {% endfor %} {% else %} <p class="text-slate-500 italic text-sm px-3 py-2">Start your first business chat!</p> {% endif %}
+  <!-- **** SLIDE-OUT Left Sidebar (Businesses) **** -->
+  <aside id="businesses-sidebar" class="absolute top-0 left-0 z-30 h-full w-72 flex-shrink-0 bg-slate-100 border-r border-slate-300 shadow-lg flex flex-col transition-transform duration-300 ease-in-out transform -translate-x-full">
+    {# Header #}
+    <div class="p-4 border-b border-slate-200 flex-shrink-0 flex justify-between items-center">
+        <h2 class="text-lg font-semibold text-slate-700">My Businesses</h2>
+        <button id="close-businesses-btn" title="Close Businesses" class="text-slate-500 hover:text-red-600 p-1.5 rounded-md hover:bg-slate-200 transition duration-150 ease-in-out">
+           <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"> <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12" /> </svg>
+        </button>
+    </div>
+    {# Content #}
+    <div class="p-4 flex-shrink-0">
+        <a href="{{ url_for('views.dashboard') }}" class="flex items-center justify-center w-full bg-primary hover:bg-primary-dark text-white font-semibold py-2.5 px-4 rounded-lg focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 text-sm transition duration-150 ease-in-out shadow-sm">
+            <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"> <path stroke-linecap="round" stroke-linejoin="round" d="M12 4v16m8-8H4" /> </svg>
+            New Business Chat
+        </a>
+    </div>
+    <nav class="flex-grow overflow-y-auto p-4 space-y-1 scrollbar-thin scrollbar-thumb-slate-400 scrollbar-track-slate-200">
+      {% if all_conversations %}
+        {% for convo in all_conversations %}
+            <a href="{{ url_for('views.dashboard', conversation_id=convo._id) }}" class="block px-3 py-2 rounded-md text-sm font-medium truncate transition duration-150 ease-in-out {% if active_conversation_id and convo._id|string == active_conversation_id %} bg-indigo-100 text-primary font-semibold {% else %} text-slate-600 hover:bg-slate-200 hover:text-slate-800 {% endif %}">
+                {{ convo.title | default('Untitled Business', true) }}
+            </a>
+        {% endfor %}
+      {% else %}
+        <p class="text-slate-500 italic text-sm px-3 py-2">Start your first business chat!</p>
+      {% endif %}
     </nav>
   </aside>
-  <!-- End Sidebar -->
+  <!-- **** End Left Sidebar **** -->
 
-  <!-- Main Content Area -->
-  <main class="flex-1 flex overflow-y-hidden">
-    <!-- Chat Panel -->
-    <section class="flex-1 flex flex-col overflow-y-hidden bg-slate-50 border-r border-slate-200">
-      <header class="p-4 sm:p-6 border-b border-slate-200 flex-shrink-0 bg-white"> <h1 class="text-xl sm:text-2xl font-semibold text-slate-800 truncate"> {% if active_conversation_id and chat_history %} {{ chat_history[0].content[:50] + ('...' if chat_history[0].content|length > 50 else '') }} {% elif active_conversation_id %} Selected Business Chat {% else %} Welcome, {{ user.first_name }}! Let's Grow Your Business. {% endif %} </h1> </header>
-      {% with messages = get_flashed_messages(with_categories=true) %} {% if messages %} <div class="flex-shrink-0 p-4 space-y-2 border-b border-slate-200"> {% for category, message in messages %} <div class="p-3 rounded-md text-sm shadow-sm border {% if category == 'error' %} bg-red-50 border-red-300 text-red-800 {% elif category == 'success' %} bg-green-50 border-green-300 text-green-800 {% else %} bg-blue-50 border-blue-300 text-blue-800 {% endif %}" role="alert"> {{ message }} </div> {% endfor %} </div> {% endif %} {% endwith %}
-      <!-- Chat History Display -->
-      <div id="chat-history" class="flex-grow space-y-4 p-4 sm:p-6 overflow-y-auto scrollbar-thin scrollbar-thumb-slate-400 scrollbar-track-slate-200">
-            {% if not active_conversation_id %} <div class="flex items-center justify-center h-full"> <p class="text-slate-500 text-center text-base">Select a business chat from the left sidebar or start a new one below.</p> </div>
-            {% elif chat_history %}
-                {% for message in chat_history %}
-                    {% if message.role == 'user' %} <div class="flex justify-end group"> <div class="bg-indigo-600 text-white rounded-xl rounded-br-lg py-2 px-4 max-w-lg lg:max-w-xl shadow-sm relative"> <p class="text-sm whitespace-pre-wrap">{{ message.content }}</p> </div> </div>
-                    {% elif message.role == 'assistant' %} <div class="flex justify-start group"> <div class="bg-white text-slate-800 rounded-xl rounded-bl-lg py-2 px-4 max-w-lg lg:max-w-xl shadow-sm border border-slate-200 relative"> <p class="text-sm whitespace-pre-wrap">{{ message.content }}</p> <div class="mt-2 flex justify-end space-x-2 border-t border-gray-200 pt-1"> <button data-prompt="{{ message.content }}" onclick="copyPromptToImage(this)" title="Use for Image Prompt" class="bg-slate-200 hover:bg-slate-300 text-slate-600 font-bold p-1.5 rounded-full shadow text-xs transition-opacity duration-150 opacity-70 group-hover:opacity-100"> <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"> <path stroke-linecap="round" stroke-linejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" /> </svg> </button> <button data-audio-text="{{ message.content }}" onclick="copyTextToAudio(this)" title="Use for Audio Generation" class="bg-slate-200 hover:bg-slate-300 text-slate-600 font-bold p-1.5 rounded-full shadow text-xs transition-opacity duration-150 opacity-70 group-hover:opacity-100"> <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"> <path stroke-linecap="round" stroke-linejoin="round" d="M15.536 8.464a5 5 0 010 7.072m2.828-9.9a9 9 0 010 12.728M5.586 15H4a1 1 0 01-1-1v-4a1 1 0 011-1h1.586l4.707-4.707C10.923 3.663 12 4.109 12 5v14c0 .891-1.077 1.337-1.707.707L5.586 15z" /> </svg> </button> </div> </div> </div>
-                    {% endif %}
-                {% endfor %}
-            {% else %} <div class="flex items-center justify-center h-full"> <p class="text-slate-500 italic text-sm text-center">No messages yet. Send one below!</p> </div>
-            {% endif %}
+  <!-- **** SLIDE-OUT Right Image Panel **** -->
+  <aside id="image-panel" class="absolute top-0 right-0 z-20 h-full w-96 flex-shrink-0 bg-white border-l border-slate-300 shadow-lg flex flex-col transition-transform duration-300 ease-in-out transform translate-x-full scrollbar-thin scrollbar-thumb-slate-300 scrollbar-track-slate-100 overflow-y-auto">
+      {# Header #}
+      <div class="p-4 sm:p-6 border-b border-slate-200 flex-shrink-0 flex justify-between items-center sticky top-0 bg-white z-10">
+        <h2 class="text-lg font-semibold text-slate-700">Visual Generation</h2>
+        <button id="close-image-btn" title="Close Image Panel" class="text-slate-500 hover:text-red-600 p-1.5 rounded-md hover:bg-slate-200 transition duration-150 ease-in-out">
+           <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"> <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12" /> </svg>
+        </button>
       </div>
-      <!-- Chat Input Form -->
-      <div class="flex-shrink-0 p-4 sm:p-6 border-t border-slate-200 bg-white">
-          <form action="{{ url_for('views.generate_text_prompt') }}" method="POST" class="flex items-center space-x-3">
-              {# Pass state back and forth between forms #}
-              <input type="hidden" name="conversation_id" value="{{ active_conversation_id | default('', true) }}">
-              <input type="hidden" name="image_prompt" value="{{ last_image_prompt | default('', true) }}">
-              <input type="hidden" name="audio_text" value="{{ last_audio_text | default('', true) }}">
-              <input type="hidden" name="language_code" value="{{ last_language_code | default('en', true) }}">
-              <input type="hidden" name="speaker_id" value="{{ last_speaker_id | default('', true) }}">
-
-              <label for="topic" class="sr-only">Your Message:</label>
-              <textarea id="topic" name="topic" rows="1" required class="flex-grow shadow-sm appearance-none border border-slate-300 rounded-lg py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent resize-none text-sm" placeholder="Ask for marketing ideas, content suggestions...">{{ last_topic | default('', true) }}</textarea>
-              <button type="submit" title="Send Message" class="flex-shrink-0 bg-indigo-600 hover:bg-indigo-700 text-white font-semibold p-2 rounded-lg focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 transition duration-150 ease-in-out shadow-sm"> <svg class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor"> <path d="M10.894 2.553a1 1 0 00-1.788 0l-7 14a1 1 0 001.169 1.409l5-1.429A1 1 0 009 15.571V11a1 1 0 112 0v4.571a1 1 0 00.725.962l5 1.428a1 1 0 001.17-1.408l-7-14z" /> </svg> </button>
-          </form>
-           <p class="text-xs text-slate-500 mt-2 text-center">MarketMind can help brainstorm ideas. Always review suggestions.</p>
-      </div>
-    </section>
-    <!-- End Chat Panel -->
-
-    <!-- Side Panels (Image & Audio) -->
-    <aside class="w-96 flex-shrink-0 bg-white border-l border-slate-200 overflow-y-auto flex flex-col scrollbar-thin scrollbar-thumb-slate-300 scrollbar-track-slate-100">
-      <!-- Image Generation Panel -->
-      <div class="p-4 sm:p-6 border-b border-slate-200 flex-shrink-0"> <h2 class="text-lg font-semibold text-slate-700">Visual Generation</h2> </div>
-      <form action="{{ url_for('views.generate_image') }}" method="POST" class="p-4 sm:p-6 flex-shrink-0">
-          {# Pass relevant state back #}
+      {# Content #}
+      <form id="image-gen-form" action="{{ url_for('views.generate_image') }}" method="POST" class="p-4 sm:p-6 flex-shrink-0">
           <input type="hidden" name="conversation_id" value="{{ active_conversation_id | default('', true) }}">
           <input type="hidden" name="topic" value="{{ last_topic | default('', true) }}">
           <input type="hidden" name="audio_text" value="{{ last_audio_text | default('', true) }}">
           <input type="hidden" name="language_code" value="{{ last_language_code | default('en', true) }}">
           <input type="hidden" name="speaker_id" value="{{ last_speaker_id | default('', true) }}">
           <input type="hidden" name="generated_audio_base64" value="{{ generated_audio_base64 | default('', true) }}">
-
-          <div class="mb-4"> <label for="image_prompt" class="block text-slate-700 text-sm font-semibold mb-2"> Image Prompt </label> <textarea id="image_prompt" name="image_prompt" rows="4" required class="shadow-sm appearance-none border border-slate-300 rounded-lg w-full py-2 px-3 text-gray-700 text-sm leading-tight focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent resize-y" placeholder="Describe the visual you want...">{{ last_image_prompt | default('', true) }}</textarea> <p class="text-xs text-slate-500 mt-1">Use text from chat or write your own description.</p> </div>
-          <button type="submit" class="w-full bg-purple-600 hover:bg-purple-700 text-white font-semibold py-2.5 px-4 rounded-lg focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-purple-500 transition duration-150 ease-in-out shadow-sm text-sm" {% if not active_conversation_id %} disabled title="Please select or start a business chat first." class="w-full bg-gray-400 text-white font-semibold py-2.5 px-4 rounded-lg cursor-not-allowed shadow-sm text-sm" {% endif %}> Generate Image </button>
+          <div class="mb-4">
+              <label for="image_prompt" class="block text-slate-700 text-sm font-semibold mb-2"> Image Prompt </label>
+              <textarea id="image_prompt" name="image_prompt" rows="4" required class="shadow-sm appearance-none border border-slate-300 rounded-lg w-full py-2 px-3 text-gray-700 text-sm leading-tight focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent resize-y" placeholder="Describe the visual you want...">{{ last_image_prompt | default('', true) }}</textarea>
+              <p class="text-xs text-slate-500 mt-1">Use text from chat or write your own description.</p>
+          </div>
+          <button type="submit" class="w-full bg-purple-600 hover:bg-purple-700 text-white font-semibold py-2.5 px-4 rounded-lg focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-purple-500 transition duration-150 ease-in-out shadow-sm text-sm {% if not active_conversation_id %} disabled bg-gray-400 cursor-not-allowed {% endif %}" {% if not active_conversation_id %} title="Please select or start a business chat first." {% endif %}>
+              Generate Image
+          </button>
       </form>
-      <!-- Image Result Display -->
-      <div class="mt-4 p-4 sm:p-6 text-center flex flex-col border-t border-slate-200 min-h-[200px]">
-          {% if generated_image_base64 %} <h3 class="text-base font-semibold text-slate-700 mb-3 flex-shrink-0">Generated Visual:</h3> <div class="flex-shrink-0 mb-4 bg-slate-100 p-2 rounded-lg border border-slate-200"> <img src="data:image/png;base64,{{ generated_image_base64 }}" alt="Generated Image" class="max-w-full h-auto mx-auto rounded shadow"> </div> <div class="text-xs text-slate-600 text-left bg-slate-100 p-3 rounded-md border border-slate-200 space-y-1 flex-shrink-0"> <p><strong>Original Input:</strong><br> <code class="block bg-white p-1 rounded border text-slate-800 break-words">{{ last_image_prompt }}</code> </p> {% if last_refined_prompt and last_refined_prompt != last_image_prompt %} <p class="border-t border-slate-200 pt-1"><strong>Prompt Used:</strong><br> <code class="block bg-white p-1 rounded border text-slate-800 break-words">{{ last_refined_prompt }}</code> </p> {% endif %} </div>
-          {% elif image_error %} <div class="flex-grow flex items-center justify-center text-slate-500 italic text-sm">Image generation failed.</div>
-          {% else %} <div class="flex-grow flex items-center justify-center text-slate-500 italic text-sm">Image will appear here.</div>
-          {% endif %}
-          {% if image_error %} <div class="mt-4 p-3 bg-red-50 border border-red-300 text-red-800 rounded-md text-sm flex-shrink-0" role="alert"> <strong class="font-semibold">Image Generation Error:</strong> <span class="block mt-1">{{ image_error }}</span> </div> {% endif %}
+      <div class="mt-4 p-4 sm:p-6 text-center flex flex-col border-t border-slate-200 min-h-[200px] flex-grow">
+           {% if generated_image_base64 %}
+               <h3 class="text-base font-semibold text-slate-700 mb-3 flex-shrink-0">Generated Visual:</h3>
+               <div class="flex-shrink-0 mb-4 bg-slate-100 p-2 rounded-lg border border-slate-200">
+                   <img src="data:image/png;base64,{{ generated_image_base64 }}" alt="Generated Image" class="max-w-full h-auto mx-auto rounded shadow">
+               </div>
+               <div class="text-xs text-slate-600 text-left bg-slate-100 p-3 rounded-md border border-slate-200 space-y-1 flex-shrink-0">
+                   <p><strong>Original Input:</strong><br> <code class="block bg-white p-1 rounded border text-slate-800 break-words">{{ last_image_prompt }}</code> </p>
+                   {% if last_refined_prompt and last_refined_prompt != last_image_prompt %}
+                   <p class="border-t border-slate-200 pt-1"><strong>Prompt Used:</strong><br> <code class="block bg-white p-1 rounded border text-slate-800 break-words">{{ last_refined_prompt }}</code> </p>
+                   {% endif %}
+               </div>
+           {% elif image_error %}
+               <div class="flex-grow flex items-center justify-center text-red-600 italic text-sm">Image generation failed. See error below.</div>
+           {% else %}
+               <div class="flex-grow flex items-center justify-center text-slate-500 italic text-sm">Image will appear here.</div>
+           {% endif %}
+           {% if image_error %}
+           <div class="mt-4 p-3 bg-red-50 border border-red-300 text-red-800 rounded-md text-sm flex-shrink-0" role="alert">
+               <strong class="font-semibold">Image Generation Error:</strong>
+               <span class="block mt-1">{{ image_error }}</span>
+           </div>
+           {% endif %}
       </div>
+  </aside>
+  <!-- **** End Right Image Panel **** -->
 
-      <!-- Audio Generation Panel -->
-      <div class="p-4 sm:p-6 border-t border-slate-200 flex-shrink-0 mt-6"> <h2 class="text-lg font-semibold text-slate-700 mb-4">Audio Generation (TTS)</h2> </div>
-      <form action="{{ url_for('views.generate_audio') }}" method="POST" class="p-4 sm:p-6 flex-shrink-0 pt-0">
-          {# Pass relevant state back #}
-          <input type="hidden" name="conversation_id" value="{{ active_conversation_id | default('', true) }}">
-          <input type="hidden" name="topic" value="{{ last_topic | default('', true) }}">
-          <input type="hidden" name="image_prompt" value="{{ last_image_prompt | default('', true) }}">
-          <input type="hidden" name="last_refined_prompt" value="{{ last_refined_prompt | default('', true) }}">
-          <input type="hidden" name="generated_image_base64" value="{{ generated_image_base64 | default('', true) }}">
-
-          {# Language Selection #}
-          <div class="mb-4">
-              <label for="language_code" class="block text-slate-700 text-sm font-semibold mb-2"> Language: </label>
-              <select id="language_code" name="language_code" required class="shadow-sm appearance-none border border-slate-300 rounded-lg w-full py-2 px-3 text-gray-700 text-sm leading-tight focus:outline-none focus:ring-2 focus:ring-teal-500 focus:border-transparent bg-white">
-                  {% for code, name in supported_languages.items() %} <option value="{{ code }}" {% if code == last_language_code %}selected{% endif %}>{{ name }} ({{ code }})</option> {% endfor %}
-              </select>
-          </div>
-
-          {# Speaker Selection #}
-          <div class="mb-4">
-              <label for="speaker_id" class="block text-slate-700 text-sm font-semibold mb-2"> Speaker Voice: </label>
-              <select id="speaker_id" name="speaker_id" required class="shadow-sm appearance-none border border-slate-300 rounded-lg w-full py-2 px-3 text-gray-700 text-sm leading-tight focus:outline-none focus:ring-2 focus:ring-teal-500 focus:border-transparent bg-white"
-                      {% if not available_speakers %}disabled{% endif %}> {# Disable if no speakers #}
-
-                  {% if available_speakers %}
-                      {# Populate with speakers found by the backend #}
-                      {% for speaker in available_speakers %}
-                          <option value="{{ speaker }}" {% if speaker == last_speaker_id %}selected{% endif %}>
-                              {# Simple formatting for speaker names (filenames / folder names) #}
-                              {{ speaker.replace('_', ' ').title() }}
-                          </option>
-                      {% endfor %}
-                  {% else %}
-                      <option value="" disabled selected>No Speakers Loaded</option>
-                  {% endif %}
-              </select>
-              {# <<< UPDATED INSTRUCTION TEXT >>> #}
-              {% if available_speakers %}
-                 <p class="text-xs text-slate-500 mt-1">Select a voice from your './xtts/actors' folder.</p>
-              {% else %}
-                 <p class="text-xs text-red-600 mt-1">No speakers found. Add .wav files to './xtts/actors'.</p>
-              {% endif %}
-          </div>
-
-          {# Text Input #}
-          <div class="mb-4">
-              <label for="audio_text" class="block text-slate-700 text-sm font-semibold mb-2"> Text to Speak: </label>
-              <textarea id="audio_text" name="audio_text" rows="4" required class="shadow-sm appearance-none border border-slate-300 rounded-lg w-full py-2 px-3 text-gray-700 text-sm leading-tight focus:outline-none focus:ring-2 focus:ring-teal-500 focus:border-transparent resize-y" placeholder="Enter text for the voiceover...">{{ last_audio_text | default('', true) }}</textarea>
-              <p class="text-xs text-slate-500 mt-1">Use text from chat or write your own script.</p>
-          </div>
-          <button type="submit" class="w-full bg-teal-600 hover:bg-teal-700 text-white font-semibold py-2.5 px-4 rounded-lg focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-teal-500 transition duration-150 ease-in-out shadow-sm text-sm" {% if not active_conversation_id %} disabled title="Please select or start a business chat first." class="w-full bg-gray-400 text-white font-semibold py-2.5 px-4 rounded-lg cursor-not-allowed shadow-sm text-sm" {% endif %}> Generate Audio </button>
+  <!-- **** SLIDE-OUT Right Audio Panel **** -->
+  <aside id="audio-panel" class="absolute top-0 right-0 z-10 h-full w-96 flex-shrink-0 bg-white border-l border-slate-300 shadow-lg flex flex-col transition-transform duration-300 ease-in-out transform translate-x-full scrollbar-thin scrollbar-thumb-slate-300 scrollbar-track-slate-100 overflow-y-auto">
+      {# Header #}
+       <div class="p-4 sm:p-6 border-b border-slate-200 flex-shrink-0 flex justify-between items-center sticky top-0 bg-white z-10">
+        <h2 class="text-lg font-semibold text-slate-700">Audio Generation (TTS)</h2>
+        <button id="close-audio-btn" title="Close Audio Panel" class="text-slate-500 hover:text-red-600 p-1.5 rounded-md hover:bg-slate-200 transition duration-150 ease-in-out">
+           <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"> <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12" /> </svg>
+        </button>
+      </div>
+      {# Content #}
+      <form id="audio-gen-form" action="{{ url_for('views.generate_audio') }}" method="POST" class="p-4 sm:p-6 flex-shrink-0">
+           <input type="hidden" name="conversation_id" value="{{ active_conversation_id | default('', true) }}">
+           <input type="hidden" name="topic" value="{{ last_topic | default('', true) }}">
+           <input type="hidden" name="image_prompt" value="{{ last_image_prompt | default('', true) }}">
+           <input type="hidden" name="last_refined_prompt" value="{{ last_refined_prompt | default('', true) }}">
+           <input type="hidden" name="generated_image_base64" value="{{ generated_image_base64 | default('', true) }}">
+           <div class="mb-4">
+                <label for="language_code" class="block text-slate-700 text-sm font-semibold mb-2"> Language: </label>
+                <select id="language_code" name="language_code" required class="shadow-sm appearance-none border border-slate-300 rounded-lg w-full py-2 px-3 text-gray-700 text-sm leading-tight focus:outline-none focus:ring-2 focus:ring-teal-500 focus:border-transparent bg-white">
+                    {% for code, name in supported_languages.items() %}
+                        <option value="{{ code }}" {% if code == last_language_code %}selected{% endif %}>{{ name }} ({{ code }})</option>
+                    {% endfor %}
+                </select>
+           </div>
+           <div class="mb-4">
+                <label for="speaker_id" class="block text-slate-700 text-sm font-semibold mb-2"> Speaker Voice: </label>
+                <select id="speaker_id" name="speaker_id" required class="shadow-sm appearance-none border border-slate-300 rounded-lg w-full py-2 px-3 text-gray-700 text-sm leading-tight focus:outline-none focus:ring-2 focus:ring-teal-500 focus:border-transparent bg-white {% if not available_speakers %} bg-slate-100 text-slate-500 cursor-not-allowed {% endif %}" {% if not available_speakers %}disabled{% endif %}>
+                    {% if available_speakers %}
+                        {% for speaker in available_speakers %}
+                            <option value="{{ speaker }}" {% if speaker == last_speaker_id %}selected{% endif %}> {{ speaker.replace('_', ' ').title() }} </option>
+                        {% endfor %}
+                    {% else %}
+                        <option value="" disabled selected>No Speakers Found/Loaded</option>
+                    {% endif %}
+                </select>
+                {% if available_speakers %}
+                <p class="text-xs text-slate-500 mt-1">Select a voice from your './xtts/speakers' folder.</p>
+                {% else %}
+                <p class="text-xs text-red-600 mt-1">No speakers loaded. Check './xtts/speakers' and TTS service.</p>
+                {% endif %}
+           </div>
+           <div class="mb-4">
+                <label for="audio_text" class="block text-slate-700 text-sm font-semibold mb-2"> Text to Speak: </label>
+                <textarea id="audio_text" name="audio_text" rows="4" required class="shadow-sm appearance-none border border-slate-300 rounded-lg w-full py-2 px-3 text-gray-700 text-sm leading-tight focus:outline-none focus:ring-2 focus:ring-teal-500 focus:border-transparent resize-y" placeholder="Enter text for the voiceover...">{{ last_audio_text | default('', true) }}</textarea>
+                <p class="text-xs text-slate-500 mt-1">Use text from chat or write your own script.</p>
+           </div>
+           <button type="submit" class="w-full text-white font-semibold py-2.5 px-4 rounded-lg focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-teal-500 transition duration-150 ease-in-out shadow-sm text-sm {% if not active_conversation_id or not available_speakers %} bg-gray-400 cursor-not-allowed {% else %} bg-teal-600 hover:bg-teal-700 {% endif %}" {% if not active_conversation_id or not available_speakers %} disabled {% endif %} title="{% if not active_conversation_id %}Please select or start a business chat first.{% elif not available_speakers %}No speakers available for generation.{% else %}Generate Audio{% endif %}">
+                Generate Audio
+           </button>
       </form>
-      <!-- Audio Result Display -->
-      <div class="mt-4 p-4 sm:p-6 text-center flex flex-col border-t border-slate-200 min-h-[150px]">
+      <div class="mt-4 p-4 sm:p-6 text-center flex flex-col border-t border-slate-200 min-h-[150px] flex-grow">
            {% if generated_audio_base64 %}
-              <h3 class="text-base font-semibold text-slate-700 mb-3 flex-shrink-0">Generated Audio:</h3>
-              <div class="flex-shrink-0 mb-4 space-y-2">
-                   <audio controls class="w-full h-10"> <source src="data:audio/wav;base64,{{ generated_audio_base64 }}" type="audio/wav"> Your browser does not support the audio element. </audio>
-                   <a href="data:audio/wav;base64,{{ generated_audio_base64 }}" download="generated_audio_{{ active_conversation_id }}_{{ range(1, 10000) | random }}.wav" class="inline-block text-xs bg-slate-200 hover:bg-slate-300 text-slate-700 px-3 py-1.5 rounded-md" title="Download WAV file"> Download Audio File </a>
-              </div>
-              <div class="text-xs text-slate-600 text-left bg-slate-100 p-3 rounded-md border border-slate-200 space-y-1 flex-shrink-0">
-                 <p><strong>Text Used:</strong><br> <code class="block bg-white p-1 rounded border text-slate-800 break-words">{{ last_audio_text }}</code> </p>
-                 <p class="border-t border-slate-200 pt-1"><strong>Settings:</strong> Lang: {{ last_language_code }}, Speaker: {{ last_speaker_id.replace('_', ' ').title() }}</p>
-             </div>
-         {% elif audio_error %} <div class="flex-grow flex items-center justify-center text-slate-500 italic text-sm">Audio generation failed.</div>
-         {% else %} <div class="flex-grow flex items-center justify-center text-slate-500 italic text-sm">Generated audio player will appear here.</div>
-         {% endif %}
-         {% if audio_error %} <div class="mt-4 p-3 bg-red-50 border border-red-300 text-red-800 rounded-md text-sm flex-shrink-0" role="alert"> <strong class="font-semibold">Audio Generation Error:</strong> <span class="block mt-1">{{ audio_error }}</span> </div> {% endif %}
+               <h3 class="text-base font-semibold text-slate-700 mb-3 flex-shrink-0">Generated Audio:</h3>
+               <div class="flex-shrink-0 mb-4 bg-slate-100 p-2 rounded-lg border border-slate-200 text-center">
+                   <audio controls class="w-full h-10 mb-2">
+                       <source src="data:audio/wav;base64,{{ generated_audio_base64 }}" type="audio/wav">
+                       Your browser does not support the audio element.
+                   </audio>
+                   {% set unique_id = active_conversation_id[:8] if active_conversation_id else range(1, 1000) | random %}
+                   <a href="data:audio/wav;base64,{{ generated_audio_base64 }}" download="generated_audio_{{ unique_id }}_{{ range(1, 10000) | random }}.wav" class="inline-block text-xs bg-slate-200 hover:bg-slate-300 text-slate-700 px-3 py-1.5 rounded-md" title="Download WAV file">
+                        Download Audio File
+                    </a>
+               </div>
+               <div class="text-xs text-slate-600 text-left bg-slate-100 p-3 rounded-md border border-slate-200 space-y-1 flex-shrink-0">
+                   <p><strong>Text Used:</strong><br> <code class="block bg-white p-1 rounded border text-slate-800 break-words">{{ last_audio_text }}</code> </p>
+                   <p class="border-t border-slate-200 pt-1"><strong>Settings:</strong> Lang: {{ last_language_code }}, Speaker: {{ last_speaker_id.replace('_', ' ').title() if last_speaker_id else 'N/A' }}</p>
+               </div>
+           {% elif audio_error %}
+               <div class="flex-grow flex items-center justify-center text-red-600 italic text-sm">Audio generation failed. See error below.</div>
+           {% else %}
+               <div class="flex-grow flex items-center justify-center text-slate-500 italic text-sm">Generated audio player will appear here.</div>
+           {% endif %}
+           {% if audio_error %}
+           <div class="mt-4 p-3 bg-red-50 border border-red-300 text-red-800 rounded-md text-sm flex-shrink-0" role="alert">
+               <strong class="font-semibold">Audio Generation Error:</strong>
+               <span class="block mt-1">{{ audio_error }}</span>
+           </div>
+           {% endif %}
       </div>
-      <!-- End Audio Result Display -->
-    </aside>
-    <!-- End Side Panels -->
-  </main>
-  <!-- End Main Content Area -->
-</div> {# End Root Flex container #}
+  </aside>
+  <!-- **** End Right Audio Panel **** -->
 
-{# --- JavaScript functions --- #}
+  <!-- **** Main Chat Area **** -->
+  {# flex-1: Takes horizontal space #}
+  {# flex flex-col: Vertical layout #}
+  {# h-full: Inherits height #}
+  {# *** REMOVED overflow-hidden *** #}
+  <main id="main-chat-area" class="flex-1 flex flex-col h-full bg-slate-50 transition-[margin] duration-300 ease-in-out">
+
+      <!-- Chat Header -->
+      {# flex-shrink-0: Fixed height #}
+      {# *** ADDED/ENSURED sticky top-0 z-10 for fixed header *** #}
+      <header class="p-4 sm:p-6 border-b border-slate-200 flex-shrink-0 bg-white flex items-center justify-between space-x-4 sticky top-0 z-10">
+          {# Left Toggle #}
+          <button id="toggle-businesses-btn" title="Toggle Businesses" class="flex-shrink-0 text-slate-500 hover:text-primary p-1.5 rounded-md hover:bg-slate-100 transition duration-150 ease-in-out">
+              <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                 <path stroke-linecap="round" stroke-linejoin="round" d="M4 6h16M4 12h16M4 18h16" />
+              </svg>
+          </button>
+          {# Title #}
+          <h1 class="flex-grow text-xl sm:text-2xl font-semibold text-slate-800 truncate text-center">
+              {% if active_conversation_id and chat_history %}
+                  {{ chat_history[0].content[:50] + ('...' if chat_history[0].content|length > 50 else '') }}
+              {% elif active_conversation_id %}
+                  Selected Business Chat
+              {% else %}
+                   New Business Chat {# Changed title for new chat state #}
+              {% endif %}
+          </h1>
+          {# Right Toggles #}
+          <div class="flex items-center space-x-2 flex-shrink-0">
+              <button id="toggle-image-btn" title="Toggle Image Generation" class="text-slate-500 hover:text-purple-600 p-1.5 rounded-md hover:bg-slate-100 transition duration-150 ease-in-out">
+                   <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"> <path stroke-linecap="round" stroke-linejoin="round" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" /> </svg>
+              </button>
+              <button id="toggle-audio-btn" title="Toggle Audio Generation" class="text-slate-500 hover:text-teal-600 p-1.5 rounded-md hover:bg-slate-100 transition duration-150 ease-in-out">
+                   <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"> <path stroke-linecap="round" stroke-linejoin="round" d="M15.536 8.464a5 5 0 010 7.072m2.828-9.9a9 9 0 010 12.728M5.586 15H4a1 1 0 01-1-1v-4a1 1 0 011-1h1.586l4.707-4.707C10.923 3.663 12 4.109 12 5v14c0 .891-1.077 1.337-1.707.707L5.586 15z" /> </svg>
+              </button>
+          </div>
+      </header>
+
+       <!-- Optional Flash Messages -->
+       {% with messages = get_flashed_messages(with_categories=true) %}
+           {% if messages %}
+           {# flex-shrink-0: Fixed height #}
+           <div class="flex-shrink-0 p-4 space-y-2 border-b border-slate-200 bg-white"> {# Added bg-white to match header/footer #}
+               {% for category, message in messages %}
+                <div class="p-4 rounded-lg text-sm shadow-md border {{ 'bg-red-50 text-red-800 border-red-300' if category == 'error' else 'bg-green-50 text-green-800 border-green-300' if category == 'success' else 'bg-blue-50 text-blue-800 border-blue-300' }}">
+                    {{ message }}
+                </div>
+               {% endfor %}
+           </div>
+           {% endif %}
+       {% endwith %}
+
+      <!-- Chat History Display -->
+      {# flex-grow: Takes remaining vertical space #}
+      {# overflow-y-auto: Makes ONLY this div scrollable #}
+      {# min-h-0: Helps flex/overflow calculation #}
+      <div id="chat-history" class="flex-grow overflow-y-auto min-h-0 p-4 sm:p-6 scrollbar-thin scrollbar-thumb-slate-400 scrollbar-track-slate-200">
+            {# Welcome/Empty State or Chat Messages #}
+            {% if not active_conversation_id %}
+             <div class="h-full flex flex-col justify-center items-center text-center">
+                 <div class="max-w-lg w-full bg-white rounded-xl shadow-sm border border-slate-200 p-6 sm:p-8">
+                    <svg class="w-16 h-16 mx-auto text-primary mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-5 5v-5z"></path></svg>
+                    <h2 class="text-2xl font-semibold text-slate-800 mb-2">Welcome to MarketMind!</h2>
+                    <p class="text-slate-600 mb-6">Your AI marketing assistant for small businesses.</p>
+                    <p class="text-slate-500 mb-4 text-sm">Describe your business or ask a marketing question below to start your first chat!</p>
+                    {# Removed button to open sidebar, prompt user to type instead #}
+                 </div>
+             </div>
+            {% elif chat_history %}
+                 {# Message loop #}
+                 {% for message in chat_history %}
+                    {% if message.role == 'user' %}
+                    <div class="flex justify-end group mb-4">
+                        <div class="bg-primary text-white rounded-xl rounded-br-lg py-2 px-4 max-w-lg lg:max-w-xl xl:max-w-2xl shadow-sm relative">
+                            <p class="text-sm whitespace-pre-wrap">{{ message.content }}</p>
+                        </div>
+                    </div>
+                    {% elif message.role == 'assistant' %}
+                    <div class="flex justify-start group mb-4">
+                        <div class="bg-white text-slate-800 rounded-xl rounded-bl-lg py-2 px-4 max-w-lg lg:max-w-xl xl:max-w-2xl shadow-sm border border-slate-200 relative">
+                            <p class="text-sm whitespace-pre-wrap">{{ message.content }}</p>
+                            <div class="absolute -bottom-2 right-2 flex items-center space-x-1 opacity-0 group-hover:opacity-100 transition-opacity duration-150">
+                                <button data-prompt="{{ message.content }}" onclick="copyPromptToImage(this)" title="Use for Image Prompt" class="bg-slate-200 hover:bg-purple-200 text-slate-600 hover:text-purple-700 p-1 rounded-full shadow-md text-xs">
+                                    <svg class="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"> <path stroke-linecap="round" stroke-linejoin="round" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" /> </svg>
+                                </button>
+                                <button data-audio-text="{{ message.content }}" onclick="copyTextToAudio(this)" title="Use for Audio Generation" class="bg-slate-200 hover:bg-teal-200 text-slate-600 hover:text-teal-700 p-1 rounded-full shadow-md text-xs">
+                                    <svg class="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"> <path stroke-linecap="round" stroke-linejoin="round" d="M15.536 8.464a5 5 0 010 7.072m2.828-9.9a9 9 0 010 12.728M5.586 15H4a1 1 0 01-1-1v-4a1 1 0 011-1h1.586l4.707-4.707C10.923 3.663 12 4.109 12 5v14c0 .891-1.077 1.337-1.707.707L5.586 15z" /> </svg>
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                    {% endif %}
+                 {% endfor %}
+            {% else %}
+                 {# Empty chat state #}
+                 <div class="h-full flex items-center justify-center">
+                     <p class="text-slate-500 italic text-sm text-center">No messages in this chat yet.<br>Send your first message below!</p>
+                 </div>
+            {% endif %}
+      </div>
+
+      <!-- Chat Input Form -->
+      {# flex-shrink-0: Fixed height, pinned to bottom #}
+      <div class="flex-shrink-0 p-4 sm:p-6 border-t border-slate-200 bg-white">
+          <form id="text-prompt-form" action="{{ url_for('views.generate_text_prompt') }}" method="POST" class="flex items-center space-x-3">
+              {# Hidden fields #}
+              <input type="hidden" name="conversation_id" value="{{ active_conversation_id | default('', true) }}">
+              <input type="hidden" name="image_prompt" value="{{ last_image_prompt | default('', true) }}">
+              <input type="hidden" name="last_refined_prompt" value="{{ last_refined_prompt | default('', true) }}">
+              <input type="hidden" name="generated_image_base64" value="{{ generated_image_base64 | default('', true) }}">
+              <input type="hidden" name="audio_text" value="{{ last_audio_text | default('', true) }}">
+              <input type="hidden" name="language_code" value="{{ last_language_code | default('en', true) }}">
+              <input type="hidden" name="speaker_id" value="{{ last_speaker_id | default('', true) }}">
+              <input type="hidden" name="generated_audio_base64" value="{{ generated_audio_base64 | default('', true) }}">
+
+              <label for="topic" class="sr-only">Your Message:</label>
+              <textarea id="topic" name="topic" rows="1" required class="flex-grow shadow-sm appearance-none border border-slate-300 rounded-lg py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent resize-none text-sm" placeholder="Ask for marketing ideas, content suggestions...">{{ last_topic | default('', true) }}</textarea>
+              {# *** REMOVED disabled attribute and classes *** #}
+              <button type="submit" title="Send Message" class="flex-shrink-0 bg-primary hover:bg-primary-dark text-white font-semibold p-2 rounded-lg focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 transition duration-150 ease-in-out shadow-sm">
+                  <svg class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+                      <path d="M10.894 2.553a1 1 0 00-1.788 0l-7 14a1 1 0 001.169 1.409l5-1.429A1 1 0 009 15.571V11a1 1 0 112 0v4.571a1 1 0 00.725.962l5 1.428a1 1 0 001.17-1.408l-7-14z" />
+                  </svg>
+              </button>
+          </form>
+           <p class="text-xs text-slate-500 mt-2 text-center">MarketMind can help brainstorm ideas. Always review suggestions.</p>
+      </div>
+
+  </main>
+  <!-- **** End Main Chat Area **** -->
+
+</div>
+{# End dashboard container #}
+{% endblock %} {# End content block override #}
+
+
+{% block scripts %}
+{# Paste the SAME JavaScript from the previous answer here #}
 <script>
- function copyPromptToImage(buttonElement) { const promptText = buttonElement.getAttribute('data-prompt'); const imagePromptTextarea = document.getElementById('image_prompt'); if (imagePromptTextarea && promptText) { imagePromptTextarea.value = promptText; imagePromptTextarea.scrollTop = 0; imagePromptTextarea.focus(); buttonElement.classList.add('bg-green-700'); setTimeout(() => buttonElement.classList.remove('bg-green-700'), 1000); } else { console.error("Error copying to image prompt."); alert("Could not copy text to image prompt."); } }
- function copyTextToAudio(buttonElement) { const textToSpeak = buttonElement.getAttribute('data-audio-text'); const audioTextarea = document.getElementById('audio_text'); if (audioTextarea && textToSpeak) { audioTextarea.value = textToSpeak; audioTextarea.scrollTop = 0; audioTextarea.focus(); buttonElement.classList.add('bg-green-700'); setTimeout(() => buttonElement.classList.remove('bg-green-700'), 1000); } else { console.error("Error copying to audio text."); alert("Could not copy text for audio."); } }
- function scrollToBottom(elementId) { const element = document.getElementById(elementId); if (element) { element.scrollTop = element.scrollHeight; } }
- window.addEventListener('load', () => { scrollToBottom('chat-history'); });
- document.querySelectorAll('textarea').forEach(textarea => { function autoresize() { textarea.style.height = 'auto'; textarea.style.height = textarea.scrollHeight + 'px'; } textarea.addEventListener('input', autoresize); setTimeout(autoresize, 0); });
+ // --- Helper Functions ---
+ function copyPromptToImage(buttonElement) {
+    const promptText = buttonElement.getAttribute('data-prompt');
+    const imagePromptTextarea = document.getElementById('image_prompt');
+    if (imagePromptTextarea) {
+        imagePromptTextarea.value = promptText;
+        imagePromptTextarea.focus(); // Focus to potentially trigger resize/scroll
+        imagePromptTextarea.dispatchEvent(new Event('input', { bubbles: true })); // Ensure reactivity
+        autoResizeTextarea(imagePromptTextarea); // Explicitly resize
+        // Open the image panel if it's closed
+        if (!isPanelOpen('image')) {
+            togglePanel('image', true);
+        }
+    }
+ }
+
+ function copyTextToAudio(buttonElement) {
+    const audioText = buttonElement.getAttribute('data-audio-text');
+    const audioTextTextarea = document.getElementById('audio_text');
+    if (audioTextTextarea) {
+        audioTextTextarea.value = audioText;
+        audioTextTextarea.focus();
+        audioTextTextarea.dispatchEvent(new Event('input', { bubbles: true }));
+        autoResizeTextarea(audioTextTextarea);
+        // Open the audio panel if it's closed
+        if (!isPanelOpen('audio')) {
+             togglePanel('audio', true);
+        }
+    }
+ }
+
+ function scrollToBottom(elementId) {
+     const element = document.getElementById(elementId);
+     if (element) {
+         // Use smooth scroll for better UX, but only if element is scrollable
+         if (element.scrollHeight > element.clientHeight) {
+            element.scrollTo({ top: element.scrollHeight, behavior: 'smooth' });
+         }
+     }
+ }
+
+ function autoResizeTextarea(textarea) {
+    if (!textarea) return;
+    textarea.style.height = 'auto'; // Reset height to recalculate scrollHeight
+    const maxHeight = 160; // Approx 4-5 lines max height (adjust as needed)
+    const scrollHeight = textarea.scrollHeight;
+    // Apply scrollHeight up to maxHeight. Add a little buffer (e.g., 2px) to avoid premature scrollbar
+    textarea.style.height = Math.min(scrollHeight, maxHeight) + 2 + 'px';
+    textarea.style.overflowY = scrollHeight > maxHeight ? 'auto' : 'hidden';
+ }
+
+ // **** Panel Toggle Logic ****
+ document.addEventListener('DOMContentLoaded', () => {
+    // --- Element References ---
+    const panels = {
+        businesses: document.getElementById('businesses-sidebar'),
+        image: document.getElementById('image-panel'),
+        audio: document.getElementById('audio-panel')
+    };
+    const toggleButtons = {
+        businesses: document.getElementById('toggle-businesses-btn'),
+        image: document.getElementById('toggle-image-btn'),
+        audio: document.getElementById('toggle-audio-btn')
+    };
+    const closeButtons = {
+        businesses: document.getElementById('close-businesses-btn'),
+        image: document.getElementById('close-image-btn'),
+        audio: document.getElementById('close-audio-btn')
+    };
+    const mainChatArea = document.getElementById('main-chat-area');
+    const chatHistory = document.getElementById('chat-history');
+    const dashboardContainer = mainChatArea ? mainChatArea.parentElement : null;
+
+    // --- State Check ---
+    window.isPanelOpen = function(panelId) { // Make it global for easy debugging from console
+        const panel = panels[panelId];
+        if (!panel) return false;
+        if (panelId === 'businesses') {
+            return !panel.classList.contains('-translate-x-full');
+        } else {
+            return !panel.classList.contains('translate-x-full');
+        }
+    }
+
+    // --- Margin Adjustment ---
+    function adjustMainContentMargins() {
+        if (!mainChatArea) return;
+        const isLeftOpen = isPanelOpen('businesses');
+        const isRightOpen = isPanelOpen('image') || isPanelOpen('audio');
+        mainChatArea.style.marginLeft = isLeftOpen ? '18rem' : '0px';
+        mainChatArea.style.marginRight = isRightOpen ? '24rem' : '0px';
+    }
+
+
+    // --- Toggle Panel Function ---
+    window.togglePanel = function(panelId, forceOpen) { // Make global for debugging
+        const panel = panels[panelId];
+        if (!panel) return;
+        const currentlyOpen = isPanelOpen(panelId);
+        let shouldBeOpen;
+        if (forceOpen === true) shouldBeOpen = true;
+        else if (forceOpen === false) shouldBeOpen = false;
+        else shouldBeOpen = !currentlyOpen;
+        if (shouldBeOpen === currentlyOpen) return;
+
+        if (shouldBeOpen && (panelId === 'image' || panelId === 'audio')) {
+            const otherPanelId = (panelId === 'image') ? 'audio' : 'image';
+            if (isPanelOpen(otherPanelId)) {
+                const otherPanel = panels[otherPanelId];
+                 if (otherPanel) otherPanel.classList.add('translate-x-full');
+            }
+        }
+
+        if (panelId === 'businesses') {
+            panel.classList.toggle('-translate-x-full', !shouldBeOpen);
+        } else {
+            panel.classList.toggle('translate-x-full', !shouldBeOpen);
+             const zIndexOpen = '20'; const zIndexClosed = '10';
+             if (panelId === 'image') {
+                 panel.style.zIndex = shouldBeOpen ? zIndexOpen : zIndexClosed;
+                 if(panels.audio) panels.audio.style.zIndex = zIndexClosed;
+             } else if (panelId === 'audio') {
+                 panel.style.zIndex = shouldBeOpen ? zIndexOpen : zIndexClosed;
+                 if(panels.image) panels.image.style.zIndex = zIndexClosed;
+             }
+        }
+        requestAnimationFrame(adjustMainContentMargins);
+    }
+
+    // --- Event Listeners ---
+    Object.keys(toggleButtons).forEach(key => {
+        if (toggleButtons[key]) toggleButtons[key].addEventListener('click', (e) => { e.stopPropagation(); togglePanel(key); });
+    });
+    Object.keys(closeButtons).forEach(key => {
+        if (closeButtons[key]) closeButtons[key].addEventListener('click', (e) => { e.stopPropagation(); togglePanel(key, false); });
+    });
+
+    // Click outside handler
+    if (dashboardContainer) {
+         dashboardContainer.addEventListener('click', (e) => {
+             const clickedInsideBusiness = panels.businesses && panels.businesses.contains(e.target);
+             const clickedInsideImage = panels.image && panels.image.contains(e.target);
+             const clickedInsideAudio = panels.audio && panels.audio.contains(e.target);
+             const clickedInsideMainInteractive = mainChatArea && mainChatArea.contains(e.target) && e.target.closest('button, a, input, textarea, select, [role="button"], [onclick]');
+             const clickedOnMainBackground = mainChatArea && e.target === mainChatArea;
+
+             // Only close if the click is TRULY outside interactive areas
+             if (!clickedInsideBusiness && !clickedInsideImage && !clickedInsideAudio && !clickedInsideMainInteractive && !clickedOnMainBackground) {
+                  if (isPanelOpen('businesses')) togglePanel('businesses', false);
+                  if (isPanelOpen('image')) togglePanel('image', false);
+                  if (isPanelOpen('audio')) togglePanel('audio', false);
+             }
+         });
+     }
+
+
+    // --- Initial Setup ---
+    adjustMainContentMargins();
+    if (chatHistory) {
+        const initialScroll = () => {
+             if (chatHistory.scrollHeight > chatHistory.clientHeight) {
+                chatHistory.scrollTop = chatHistory.scrollHeight;
+             }
+        };
+        setTimeout(initialScroll, 50);
+
+
+        const observer = new MutationObserver((mutations) => {
+            let addedNodes = false;
+            for(let mutation of mutations) { if (mutation.type === 'childList' && mutation.addedNodes.length > 0) { addedNodes = true; break; } }
+            if(addedNodes) {
+                 const isScrolledNearBottom = chatHistory.scrollHeight - chatHistory.clientHeight <= chatHistory.scrollTop + 150;
+                 if (isScrolledNearBottom) {
+                    scrollToBottom('chat-history'); // Smooth scroll for new messages
+                 }
+            }
+        });
+        observer.observe(chatHistory, { childList: true });
+    }
+
+    // Auto-resize textareas
+    document.querySelectorAll('textarea').forEach(textarea => {
+        textarea.addEventListener('input', () => autoResizeTextarea(textarea));
+        textarea.addEventListener('focus', () => autoResizeTextarea(textarea));
+        textarea.addEventListener('blur', () => autoResizeTextarea(textarea));
+        autoResizeTextarea(textarea); // Initial resize
+    });
+
+ });
 </script>
-{% endblock %}
+{% endblock %} {# End scripts block #}

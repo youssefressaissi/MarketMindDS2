@@ -169,7 +169,7 @@ services:
         "--host", "0.0.0.0",
         "--device", "cuda:0",
         "--model-folder", "/app/models",
-        "--speaker-folder", "/app/speakers",
+        "--speaker-folder", "/app/xtts/actors",
         "--output", "/app/output_audio",
         "--use-cache",
         "--lowvram"

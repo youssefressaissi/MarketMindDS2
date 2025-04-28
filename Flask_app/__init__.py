@@ -1,5 +1,3 @@
-# flask_app/__init__.py
-
 import os
 import time
 from flask import Flask
@@ -22,6 +20,7 @@ def create_app():
     # --- Configuration from Environment Variables ---
     # Load directly into app.config for simpler access later if needed,
     # but primary access in views will be via os.environ using get_config_or_raise.
+    app.config['MAX_CONTENT_LENGTH'] = 32 * 1024 * 1024  # 32 MB
     app.config['SECRET_KEY'] = os.environ.get('FLASK_SECRET_KEY', 'fallback-insecure-secret-key-change-me')
     
     # ***** CORRECTION IS HERE *****
