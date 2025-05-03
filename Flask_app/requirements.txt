@@ -3,3 +3,4 @@ pymongo
 requests # Needed to call the AUTOMATIC1111 API
 Flask-PyMongo
 Flask-Login
+

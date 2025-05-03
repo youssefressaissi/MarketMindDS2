@@ -1,38 +1,38 @@
 {# flask_app/templates/dashboard.html #}
-{% extends "base.html" %} {# Assumes the modified base.html #}
+{% extends "base.html" %} {# Assumes base.html provides structure and necessary CSS/JS #}
 
 {% block title %}Dashboard - MarketMind AI{% endblock %}
 
-{# Override the entire 'content' block from base.html #}
 {% block content %}
 {# Main dashboard container - fills the 'main#main-content' area from base.html #}
 <div class="relative flex h-full bg-slate-50 overflow-hidden"> {# Root overflow hidden for sidebars #}
 
-  <!-- **** SLIDE-OUT Left Sidebar (Businesses) **** -->
+  <!-- **** SLIDE-OUT Left Sidebar (Conversations) **** -->
   <aside id="businesses-sidebar" class="absolute top-0 left-0 z-30 h-full w-72 flex-shrink-0 bg-slate-100 border-r border-slate-300 shadow-lg flex flex-col transition-transform duration-300 ease-in-out transform -translate-x-full">
-    {# Header #}
+    {# Sidebar Header #}
     <div class="p-4 border-b border-slate-200 flex-shrink-0 flex justify-between items-center">
-        <h2 class="text-lg font-semibold text-slate-700">My Businesses</h2>
-        <button id="close-businesses-btn" title="Close Businesses" class="text-slate-500 hover:text-red-600 p-1.5 rounded-md hover:bg-slate-200 transition duration-150 ease-in-out">
+        <h2 class="text-lg font-semibold text-slate-700">My Business Chats</h2>
+        <button id="close-businesses-btn" title="Close Sidebar" class="text-slate-500 hover:text-red-600 p-1.5 rounded-md hover:bg-slate-200 transition duration-150 ease-in-out">
            <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"> <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12" /> </svg>
         </button>
     </div>
-    {# Content #}
+    {# New Chat Button #}
     <div class="p-4 flex-shrink-0">
         <a href="{{ url_for('views.dashboard') }}" class="flex items-center justify-center w-full bg-primary hover:bg-primary-dark text-white font-semibold py-2.5 px-4 rounded-lg focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 text-sm transition duration-150 ease-in-out shadow-sm">
             <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"> <path stroke-linecap="round" stroke-linejoin="round" d="M12 4v16m8-8H4" /> </svg>
-            New Business Chat
+            New Chat
         </a>
     </div>
+    {# Conversation List #}
     <nav class="flex-grow overflow-y-auto p-4 space-y-1 scrollbar-thin scrollbar-thumb-slate-400 scrollbar-track-slate-200">
       {% if all_conversations %}
         {% for convo in all_conversations %}
-            <a href="{{ url_for('views.dashboard', conversation_id=convo._id) }}" class="block px-3 py-2 rounded-md text-sm font-medium truncate transition duration-150 ease-in-out {% if active_conversation_id and convo._id|string == active_conversation_id %} bg-indigo-100 text-primary font-semibold {% else %} text-slate-600 hover:bg-slate-200 hover:text-slate-800 {% endif %}">
-                {{ convo.title | default('Untitled Business', true) }}
+            <a href="{{ url_for('views.dashboard', conversation_id=convo._id) }}" class="block px-3 py-2 rounded-md text-sm font-medium truncate transition duration-150 ease-in-out {% if active_conversation_id and convo._id|string == active_conversation_id|string %} bg-indigo-100 text-primary font-semibold {% else %} text-slate-600 hover:bg-slate-200 hover:text-slate-800 {% endif %}">
+                {{ convo.title | default('Untitled Chat', true) }}
             </a>
         {% endfor %}
       {% else %}
-        <p class="text-slate-500 italic text-sm px-3 py-2">Start your first business chat!</p>
+        <p class="text-slate-500 italic text-sm px-3 py-2">Start your first chat!</p>
       {% endif %}
     </nav>
   </aside>
@@ -47,44 +47,101 @@
            <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"> <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12" /> </svg>
         </button>
       </div>
-      {# Content #}
+      {# Content - Image Generation Form and Display #}
       <form id="image-gen-form" action="{{ url_for('views.generate_image') }}" method="POST" class="p-4 sm:p-6 flex-shrink-0">
+          {# Hidden fields to preserve state #}
           <input type="hidden" name="conversation_id" value="{{ active_conversation_id | default('', true) }}">
           <input type="hidden" name="topic" value="{{ last_topic | default('', true) }}">
           <input type="hidden" name="audio_text" value="{{ last_audio_text | default('', true) }}">
           <input type="hidden" name="language_code" value="{{ last_language_code | default('en', true) }}">
           <input type="hidden" name="speaker_id" value="{{ last_speaker_id | default('', true) }}">
           <input type="hidden" name="generated_audio_base64" value="{{ generated_audio_base64 | default('', true) }}">
+          <input type="hidden" name="video_prompt" value="{{ last_video_prompt | default('', true) }}">
+          <input type="hidden" name="video_status_message" value="{{ video_status_message | default('', true) }}">
+
+          {# SHARED Hidden input for Base64 Image Data #}
+          <input type="hidden" id="init_image_base64" name="init_image_base64" value="{{ last_init_image_base64 | default('', true) }}">
+
+          {# Text Prompt Input #}
           <div class="mb-4">
               <label for="image_prompt" class="block text-slate-700 text-sm font-semibold mb-2"> Image Prompt </label>
               <textarea id="image_prompt" name="image_prompt" rows="4" required class="shadow-sm appearance-none border border-slate-300 rounded-lg w-full py-2 px-3 text-gray-700 text-sm leading-tight focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent resize-y" placeholder="Describe the visual you want...">{{ last_image_prompt | default('', true) }}</textarea>
-              <p class="text-xs text-slate-500 mt-1">Use text from chat or write your own description.</p>
+              <p class="text-xs text-slate-500 mt-1">Describe the image (required).</p>
           </div>
+
+          {# Input Image Section (Upload and Preview - Shared State) #}
+          <div class="mb-4 border border-slate-200 rounded-lg p-3 bg-slate-50">
+              <label for="init_image_upload" class="block text-slate-700 text-sm font-semibold mb-2">Input Image (Optional for Img2Img / Required for Img2Vid)</label>
+              <input type="file" id="init_image_upload" name="init_image_upload_file" accept="image/png, image/jpeg, image/webp" class="block w-full text-sm text-slate-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-purple-50 file:text-purple-700 hover:file:bg-purple-100 mb-2 cursor-pointer"/>
+              <div id="init-image-preview-container" class="mt-2 {% if not last_init_image_base64 %}hidden{% endif %}">
+                  <p class="text-xs text-slate-600 mb-1">Current Input Image:</p>
+                  <div class="relative group w-32 h-32 border border-slate-300 rounded overflow-hidden bg-white flex items-center justify-center">
+                      <img id="init-image-preview" src="{{ 'data:image/png;base64,' ~ last_init_image_base64 if last_init_image_base64 else '#' }}" alt="Input image preview" class="w-full h-full object-contain {% if not last_init_image_base64 %}hidden{% endif %}">
+                       <button type="button" id="clear-init-image" title="Clear Input Image" class="absolute top-1 right-1 bg-red-600 hover:bg-red-700 text-white rounded-full p-0.5 opacity-0 group-hover:opacity-100 focus:opacity-100 transition-opacity shadow-sm">
+                           <svg xmlns="http://www.w3.org/2000/svg" class="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="3"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12" /></svg>
+                       </button>
+                  </div>
+              </div>
+              <p class="text-xs text-slate-500 mt-1">Upload an image OR use one generated below. This image will be used for Img2Img or Video Generation.</p>
+          </div>
+          {# Submit Button for Image Generation #}
           <button type="submit" class="w-full bg-purple-600 hover:bg-purple-700 text-white font-semibold py-2.5 px-4 rounded-lg focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-purple-500 transition duration-150 ease-in-out shadow-sm text-sm {% if not active_conversation_id %} disabled bg-gray-400 cursor-not-allowed {% endif %}" {% if not active_conversation_id %} title="Please select or start a business chat first." {% endif %}>
               Generate Image
           </button>
       </form>
+      {# --- Image Result Display Area --- #}
       <div class="mt-4 p-4 sm:p-6 text-center flex flex-col border-t border-slate-200 min-h-[200px] flex-grow">
            {% if generated_image_base64 %}
+               {# Input Image Used (if different from output) #}
+               {% if last_init_image_base64 and last_init_image_base64 != generated_image_base64 %}
+                <div class="mb-4 flex-shrink-0">
+                    <h3 class="text-sm font-semibold text-slate-600 mb-2">Input Image Used:</h3>
+                    <div class="inline-block border border-slate-200 rounded p-1 bg-slate-100 shadow-sm">
+                        <img src="data:image/png;base64,{{ last_init_image_base64 }}" alt="Input image used" class="max-w-xs h-auto mx-auto rounded" style="max-height: 150px;">
+                    </div>
+                </div>
+               {% endif %}
+
+               {# Generated Image #}
                <h3 class="text-base font-semibold text-slate-700 mb-3 flex-shrink-0">Generated Visual:</h3>
-               <div class="flex-shrink-0 mb-4 bg-slate-100 p-2 rounded-lg border border-slate-200">
+               <div class="flex-shrink-0 mb-4 bg-slate-100 p-2 rounded-lg border border-slate-200 shadow-sm relative group">
                    <img src="data:image/png;base64,{{ generated_image_base64 }}" alt="Generated Image" class="max-w-full h-auto mx-auto rounded shadow">
+                   {# --- Button to trigger video from this image --- #}
+                   <button type="button" onclick="triggerVideoFromImage('{{ generated_image_base64 | escape }}')" title="Use This Image for Video Generation" class="absolute bottom-2 right-2 bg-blue-500 hover:bg-blue-600 text-white p-1.5 rounded-full shadow-md opacity-0 group-hover:opacity-100 focus:opacity-100 transition-opacity duration-150 ease-in-out">
+                       <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"> <path stroke-linecap="round" stroke-linejoin="round" d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z" /> </svg>
+                   </button>
                </div>
+               {# Prompts Used #}
                <div class="text-xs text-slate-600 text-left bg-slate-100 p-3 rounded-md border border-slate-200 space-y-1 flex-shrink-0">
-                   <p><strong>Original Input:</strong><br> <code class="block bg-white p-1 rounded border text-slate-800 break-words">{{ last_image_prompt }}</code> </p>
+                   <p><strong>Original Input:</strong><br> <code class="block bg-white p-1 rounded border text-slate-800 break-words max-h-16 overflow-y-auto">{{ last_image_prompt }}</code> </p>
                    {% if last_refined_prompt and last_refined_prompt != last_image_prompt %}
-                   <p class="border-t border-slate-200 pt-1"><strong>Prompt Used:</strong><br> <code class="block bg-white p-1 rounded border text-slate-800 break-words">{{ last_refined_prompt }}</code> </p>
+                   <p class="border-t border-slate-200 pt-1"><strong>Prompt Used:</strong><br> <code class="block bg-white p-1 rounded border text-slate-800 break-words max-h-16 overflow-y-auto">{{ last_refined_prompt }}</code> </p>
+                   {% elif last_image_prompt %}
+                   <p class="border-t border-slate-200 pt-1"><strong>Prompt Used:</strong><br> <code class="block bg-white p-1 rounded border text-slate-800 break-words max-h-16 overflow-y-auto">{{ last_image_prompt }}</code> </p>
                    {% endif %}
                </div>
+           {# Show current input image if no generation happened but one exists #}
+           {% elif last_init_image_base64 %}
+                <div class="mb-4 flex-shrink-0">
+                    <h3 class="text-sm font-semibold text-slate-600 mb-2">Current Input Image:</h3>
+                    <div class="inline-block border border-slate-200 rounded p-1 bg-slate-100 shadow-sm relative group">
+                        <img src="data:image/png;base64,{{ last_init_image_base64 }}" alt="Input image" class="max-w-xs h-auto mx-auto rounded" style="max-height: 200px;">
+                        {# --- Button to trigger video from this uploaded/existing image --- #}
+                        <button type="button" onclick="triggerVideoFromImage('{{ last_init_image_base64 | escape }}')" title="Use This Image for Video Generation" class="absolute bottom-2 right-2 bg-blue-500 hover:bg-blue-600 text-white p-1.5 rounded-full shadow-md opacity-0 group-hover:opacity-100 focus:opacity-100 transition-opacity duration-150 ease-in-out">
+                           <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"> <path stroke-linecap="round" stroke-linejoin="round" d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z" /> </svg>
+                       </button>
+                    </div>
+                </div>
            {% elif image_error %}
                <div class="flex-grow flex items-center justify-center text-red-600 italic text-sm">Image generation failed. See error below.</div>
            {% else %}
-               <div class="flex-grow flex items-center justify-center text-slate-500 italic text-sm">Image will appear here.</div>
+               <div class="flex-grow flex items-center justify-center text-slate-500 italic text-sm">Generated or uploaded input image will appear here.</div>
            {% endif %}
+           {# Image Error Display #}
            {% if image_error %}
            <div class="mt-4 p-3 bg-red-50 border border-red-300 text-red-800 rounded-md text-sm flex-shrink-0" role="alert">
                <strong class="font-semibold">Image Generation Error:</strong>
-               <span class="block mt-1">{{ image_error }}</span>
+               <span class="block mt-1 whitespace-pre-wrap">{{ image_error }}</span>
            </div>
            {% endif %}
       </div>
@@ -93,7 +150,7 @@
 
   <!-- **** SLIDE-OUT Right Audio Panel **** -->
   <aside id="audio-panel" class="absolute top-0 right-0 z-10 h-full w-96 flex-shrink-0 bg-white border-l border-slate-300 shadow-lg flex flex-col transition-transform duration-300 ease-in-out transform translate-x-full scrollbar-thin scrollbar-thumb-slate-300 scrollbar-track-slate-100 overflow-y-auto">
-      {# Header #}
+       {# Header #}
        <div class="p-4 sm:p-6 border-b border-slate-200 flex-shrink-0 flex justify-between items-center sticky top-0 bg-white z-10">
         <h2 class="text-lg font-semibold text-slate-700">Audio Generation (TTS)</h2>
         <button id="close-audio-btn" title="Close Audio Panel" class="text-slate-500 hover:text-red-600 p-1.5 rounded-md hover:bg-slate-200 transition duration-150 ease-in-out">
@@ -102,11 +159,17 @@
       </div>
       {# Content #}
       <form id="audio-gen-form" action="{{ url_for('views.generate_audio') }}" method="POST" class="p-4 sm:p-6 flex-shrink-0">
+           {# Hidden fields #}
            <input type="hidden" name="conversation_id" value="{{ active_conversation_id | default('', true) }}">
            <input type="hidden" name="topic" value="{{ last_topic | default('', true) }}">
            <input type="hidden" name="image_prompt" value="{{ last_image_prompt | default('', true) }}">
            <input type="hidden" name="last_refined_prompt" value="{{ last_refined_prompt | default('', true) }}">
            <input type="hidden" name="generated_image_base64" value="{{ generated_image_base64 | default('', true) }}">
+           <input type="hidden" name="last_init_image_base64" value="{{ last_init_image_base64 | default('', true) }}">
+           <input type="hidden" name="video_prompt" value="{{ last_video_prompt | default('', true) }}">
+           <input type="hidden" name="video_status_message" value="{{ video_status_message | default('', true) }}">
+
+           {# Language #}
            <div class="mb-4">
                 <label for="language_code" class="block text-slate-700 text-sm font-semibold mb-2"> Language: </label>
                 <select id="language_code" name="language_code" required class="shadow-sm appearance-none border border-slate-300 rounded-lg w-full py-2 px-3 text-gray-700 text-sm leading-tight focus:outline-none focus:ring-2 focus:ring-teal-500 focus:border-transparent bg-white">
@@ -115,6 +178,7 @@
                     {% endfor %}
                 </select>
            </div>
+           {# Speaker #}
            <div class="mb-4">
                 <label for="speaker_id" class="block text-slate-700 text-sm font-semibold mb-2"> Speaker Voice: </label>
                 <select id="speaker_id" name="speaker_id" required class="shadow-sm appearance-none border border-slate-300 rounded-lg w-full py-2 px-3 text-gray-700 text-sm leading-tight focus:outline-none focus:ring-2 focus:ring-teal-500 focus:border-transparent bg-white {% if not available_speakers %} bg-slate-100 text-slate-500 cursor-not-allowed {% endif %}" {% if not available_speakers %}disabled{% endif %}>
@@ -132,15 +196,18 @@
                 <p class="text-xs text-red-600 mt-1">No speakers loaded. Check './xtts/speakers' and TTS service.</p>
                 {% endif %}
            </div>
+           {# Text #}
            <div class="mb-4">
                 <label for="audio_text" class="block text-slate-700 text-sm font-semibold mb-2"> Text to Speak: </label>
                 <textarea id="audio_text" name="audio_text" rows="4" required class="shadow-sm appearance-none border border-slate-300 rounded-lg w-full py-2 px-3 text-gray-700 text-sm leading-tight focus:outline-none focus:ring-2 focus:ring-teal-500 focus:border-transparent resize-y" placeholder="Enter text for the voiceover...">{{ last_audio_text | default('', true) }}</textarea>
                 <p class="text-xs text-slate-500 mt-1">Use text from chat or write your own script.</p>
            </div>
+           {# Submit #}
            <button type="submit" class="w-full text-white font-semibold py-2.5 px-4 rounded-lg focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-teal-500 transition duration-150 ease-in-out shadow-sm text-sm {% if not active_conversation_id or not available_speakers %} bg-gray-400 cursor-not-allowed {% else %} bg-teal-600 hover:bg-teal-700 {% endif %}" {% if not active_conversation_id or not available_speakers %} disabled {% endif %} title="{% if not active_conversation_id %}Please select or start a business chat first.{% elif not available_speakers %}No speakers available for generation.{% else %}Generate Audio{% endif %}">
                 Generate Audio
            </button>
       </form>
+      {# Result Area #}
       <div class="mt-4 p-4 sm:p-6 text-center flex flex-col border-t border-slate-200 min-h-[150px] flex-grow">
            {% if generated_audio_base64 %}
                <h3 class="text-base font-semibold text-slate-700 mb-3 flex-shrink-0">Generated Audio:</h3>
@@ -173,32 +240,101 @@
   </aside>
   <!-- **** End Right Audio Panel **** -->
 
-  <!-- **** Main Chat Area **** -->
-  {# flex-1: Takes horizontal space #}
-  {# flex flex-col: Vertical layout #}
-  {# h-full: Inherits height #}
-  {# *** REMOVED overflow-hidden *** #}
-  <main id="main-chat-area" class="flex-1 flex flex-col h-full bg-slate-50 transition-[margin] duration-300 ease-in-out">
+  <!-- **** SLIDE-OUT Right Video Panel **** -->
+  <aside id="video-panel" class="absolute top-0 right-0 z-10 h-full w-96 flex-shrink-0 bg-white border-l border-slate-300 shadow-lg flex flex-col transition-transform duration-300 ease-in-out transform translate-x-full scrollbar-thin scrollbar-thumb-slate-300 scrollbar-track-slate-100 overflow-y-auto">
+      {# Header #}
+       <div class="p-4 sm:p-6 border-b border-slate-200 flex-shrink-0 flex justify-between items-center sticky top-0 bg-white z-10">
+        <h2 class="text-lg font-semibold text-slate-700">Video Generation (Img2Vid)</h2>
+        <button id="close-video-btn" title="Close Video Panel" class="text-slate-500 hover:text-red-600 p-1.5 rounded-md hover:bg-slate-200 transition duration-150 ease-in-out">
+            <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"> <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12" /> </svg>
+        </button>
+      </div>
+      {# Content #}
+      <form id="video-gen-form" action="{{ url_for('views.generate_video') }}" method="POST" class="p-4 sm:p-6 flex-shrink-0">
+           {# Hidden fields #}
+           <input type="hidden" name="conversation_id" value="{{ active_conversation_id | default('', true) }}">
+           <input type="hidden" name="topic" value="{{ last_topic | default('', true) }}">
+           <input type="hidden" name="image_prompt" value="{{ last_image_prompt | default('', true) }}">
+           <input type="hidden" name="last_refined_prompt" value="{{ last_refined_prompt | default('', true) }}">
+           <input type="hidden" name="generated_image_base64" value="{{ generated_image_base64 | default('', true) }}">
+           <input type="hidden" name="audio_text" value="{{ last_audio_text | default('', true) }}">
+           <input type="hidden" name="language_code" value="{{ last_language_code | default('en', true) }}">
+           <input type="hidden" name="speaker_id" value="{{ last_speaker_id | default('', true) }}">
+           <input type="hidden" name="generated_audio_base64" value="{{ generated_audio_base64 | default('', true) }}">
+           {# --- SHARED IMAGE STATE - Passed to backend --- #}
+           <input type="hidden" id="video_init_image_base64_hidden" name="last_init_image_base64" value="{{ last_init_image_base64 | default('', true) }}">
 
+           {# --- Display Input Image --- #}
+           <div class="mb-4 border border-slate-200 rounded-lg p-3 bg-slate-50">
+                <label class="block text-slate-700 text-sm font-semibold mb-2">Input Image for Video</label>
+                <div id="video-input-image-preview-container" class="{% if not last_init_image_base64 %}hidden{% endif %}">
+                    <div class="relative group w-32 h-32 border border-slate-300 rounded overflow-hidden bg-white flex items-center justify-center">
+                        <img id="video-input-image-preview" src="{{ 'data:image/png;base64,' ~ last_init_image_base64 if last_init_image_base64 else '#' }}" alt="Input image for video" class="w-full h-full object-contain">
+                    </div>
+                 </div>
+                 <p id="video-input-image-placeholder" class="text-xs text-red-600 font-medium mt-1 {% if last_init_image_base64 %}hidden{% endif %}"> Required: Upload or generate an image first. </p>
+                 <p class="text-xs text-slate-500 mt-1 {% if not last_init_image_base64 %}hidden{% endif %}"> Image from Visual panel is used. </p>
+            </div>
+
+           {# Video Prompt Input #}
+           <div class="mb-4">
+                <label for="video_prompt" class="block text-slate-700 text-sm font-semibold mb-2"> Video Motion Prompt: </label>
+                <textarea id="video_prompt" name="video_prompt" rows="3" required class="shadow-sm appearance-none border border-slate-300 rounded-lg w-full py-2 px-3 text-gray-700 text-sm leading-tight focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-y" placeholder="Describe desired animation or motion...">{{ last_video_prompt | default('', true) }}</textarea>
+                <p class="text-xs text-slate-500 mt-1">Describe how the image should animate.</p>
+           </div>
+
+           {# Submit Button #}
+           <button type="submit" id="generate-video-button" class="w-full text-white font-semibold py-2.5 px-4 rounded-lg focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition duration-150 ease-in-out shadow-sm text-sm {% if not active_conversation_id or not last_init_image_base64 %} bg-gray-400 cursor-not-allowed {% else %} bg-blue-600 hover:bg-blue-700 {% endif %}" {% if not active_conversation_id or not last_init_image_base64 %} disabled {% endif %} title="{% if not active_conversation_id %}Select chat.{% elif not last_init_image_base64 %}Input image required.{% else %}Generate Video{% endif %}">
+                Generate Video (GIF)
+            </button>
+      </form>
+      {# Video Status/Result Display Area #}
+      <div class="mt-4 p-4 sm:p-6 text-center flex flex-col border-t border-slate-200 min-h-[150px] flex-grow">
+           {# Display Status Message #}
+           {% if video_status_message %}
+                {% set message_type = 'success' if 'submitted' in video_status_message|lower else ('warning' if 'error' not in video_status_message|lower else 'error') %}
+                <div class="mb-4 p-3 rounded-md text-sm border
+                            {% if message_type == 'success' %} bg-green-50 text-green-800 border-green-300
+                            {% elif message_type == 'warning' %} bg-yellow-50 text-yellow-800 border-yellow-300
+                            {% else %} bg-red-50 text-red-800 border-red-300 {% endif %}" role="alert">
+                    <strong class="font-semibold">Status:</strong>
+                    <span class="block mt-1 whitespace-pre-wrap">{{ video_status_message }}</span>
+                </div>
+                {% if last_video_prompt %}
+                 <div class="text-xs text-slate-600 text-left bg-slate-100 p-3 rounded-md border border-slate-200">
+                     <p><strong>Prompt Used:</strong><br> <code class="block bg-white p-1 rounded border text-slate-800 break-words">{{ last_video_prompt }}</code> </p>
+                 </div>
+                {% endif %}
+                 {# --- Hint for manual check --- #}
+                 <p class="text-xs text-slate-500 mt-3">Check the <code class="text-xs bg-slate-200 px-1 py-0.5 rounded">./output</code> folder on your host machine for the generated GIF after a short wait.</p>
+           {% else %}
+                 <div class="flex-grow flex items-center justify-center text-slate-500 italic text-sm">Video generation status will appear here.<br>(Requires an input image from the Visual panel)</div>
+           {% endif %}
+      </div>
+  </aside>
+  <!-- **** End Right Video Panel **** -->
+
+
+  <!-- **** Main Chat Area **** -->
+  <main id="main-chat-area" class="flex-1 flex flex-col h-full bg-slate-50 transition-[margin] duration-300 ease-in-out">
       <!-- Chat Header -->
-      {# flex-shrink-0: Fixed height #}
-      {# *** ADDED/ENSURED sticky top-0 z-10 for fixed header *** #}
-      <header class="p-4 sm:p-6 border-b border-slate-200 flex-shrink-0 bg-white flex items-center justify-between space-x-4 sticky top-0 z-10">
+      <header class="p-4 sm:p-6 border-b border-slate-200 flex-shrink-0 bg-white flex items-center justify-between space-x-4 sticky top-0 z-10 shadow-sm">
           {# Left Toggle #}
           <button id="toggle-businesses-btn" title="Toggle Businesses" class="flex-shrink-0 text-slate-500 hover:text-primary p-1.5 rounded-md hover:bg-slate-100 transition duration-150 ease-in-out">
-              <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
-                 <path stroke-linecap="round" stroke-linejoin="round" d="M4 6h16M4 12h16M4 18h16" />
-              </svg>
+              <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"> <path stroke-linecap="round" stroke-linejoin="round" d="M4 6h16M4 12h16M4 18h16" /> </svg>
           </button>
-          {# Title #}
+          {# Chat Title #}
           <h1 class="flex-grow text-xl sm:text-2xl font-semibold text-slate-800 truncate text-center">
-              {% if active_conversation_id and chat_history %}
-                  {{ chat_history[0].content[:50] + ('...' if chat_history[0].content|length > 50 else '') }}
-              {% elif active_conversation_id %}
-                  Selected Business Chat
-              {% else %}
-                   New Business Chat {# Changed title for new chat state #}
+              {# Try to display convo title or a default #}
+              {% set display_title = 'New Business Chat' %} {# Default title #}
+              {% if active_conversation_id and all_conversations %}
+                  {% for convo in all_conversations %}
+                      {% if convo._id|string == active_conversation_id|string %}
+                          {% set display_title = convo.title | default('Untitled Chat', true) %}
+                      {% endif %}
+                  {% endfor %}
               {% endif %}
+              {{ display_title }}
           </h1>
           {# Right Toggles #}
           <div class="flex items-center space-x-2 flex-shrink-0">
@@ -208,14 +344,16 @@
               <button id="toggle-audio-btn" title="Toggle Audio Generation" class="text-slate-500 hover:text-teal-600 p-1.5 rounded-md hover:bg-slate-100 transition duration-150 ease-in-out">
                    <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"> <path stroke-linecap="round" stroke-linejoin="round" d="M15.536 8.464a5 5 0 010 7.072m2.828-9.9a9 9 0 010 12.728M5.586 15H4a1 1 0 01-1-1v-4a1 1 0 011-1h1.586l4.707-4.707C10.923 3.663 12 4.109 12 5v14c0 .891-1.077 1.337-1.707.707L5.586 15z" /> </svg>
               </button>
+              <button id="toggle-video-btn" title="Toggle Video Generation" class="text-slate-500 hover:text-blue-600 p-1.5 rounded-md hover:bg-slate-100 transition duration-150 ease-in-out">
+                  <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"> <path stroke-linecap="round" stroke-linejoin="round" d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z" /> </svg>
+              </button>
           </div>
       </header>
 
-       <!-- Optional Flash Messages -->
+       <!-- Flash Messages -->
        {% with messages = get_flashed_messages(with_categories=true) %}
            {% if messages %}
-           {# flex-shrink-0: Fixed height #}
-           <div class="flex-shrink-0 p-4 space-y-2 border-b border-slate-200 bg-white"> {# Added bg-white to match header/footer #}
+           <div class="flex-shrink-0 p-4 space-y-2 border-b border-slate-200 bg-white">
                {% for category, message in messages %}
                 <div class="p-4 rounded-lg text-sm shadow-md border {{ 'bg-red-50 text-red-800 border-red-300' if category == 'error' else 'bg-green-50 text-green-800 border-green-300' if category == 'success' else 'bg-blue-50 text-blue-800 border-blue-300' }}">
                     {{ message }}
@@ -226,9 +364,6 @@
        {% endwith %}
 
       <!-- Chat History Display -->
-      {# flex-grow: Takes remaining vertical space #}
-      {# overflow-y-auto: Makes ONLY this div scrollable #}
-      {# min-h-0: Helps flex/overflow calculation #}
       <div id="chat-history" class="flex-grow overflow-y-auto min-h-0 p-4 sm:p-6 scrollbar-thin scrollbar-thumb-slate-400 scrollbar-track-slate-200">
             {# Welcome/Empty State or Chat Messages #}
             {% if not active_conversation_id %}
@@ -238,7 +373,6 @@
                     <h2 class="text-2xl font-semibold text-slate-800 mb-2">Welcome to MarketMind!</h2>
                     <p class="text-slate-600 mb-6">Your AI marketing assistant for small businesses.</p>
                     <p class="text-slate-500 mb-4 text-sm">Describe your business or ask a marketing question below to start your first chat!</p>
-                    {# Removed button to open sidebar, prompt user to type instead #}
                  </div>
              </div>
             {% elif chat_history %}
@@ -246,17 +380,21 @@
                  {% for message in chat_history %}
                     {% if message.role == 'user' %}
                     <div class="flex justify-end group mb-4">
-                        <div class="bg-primary text-white rounded-xl rounded-br-lg py-2 px-4 max-w-lg lg:max-w-xl xl:max-w-2xl shadow-sm relative">
+                        <div class="bg-primary text-white rounded-xl rounded-br-lg py-2 px-4 max-w-lg lg:max-w-xl xl:max-w-2xl shadow-sm relative break-words">
                             <p class="text-sm whitespace-pre-wrap">{{ message.content }}</p>
                         </div>
                     </div>
                     {% elif message.role == 'assistant' %}
                     <div class="flex justify-start group mb-4">
-                        <div class="bg-white text-slate-800 rounded-xl rounded-bl-lg py-2 px-4 max-w-lg lg:max-w-xl xl:max-w-2xl shadow-sm border border-slate-200 relative">
+                        <div class="bg-white text-slate-800 rounded-xl rounded-bl-lg py-2 px-4 max-w-lg lg:max-w-xl xl:max-w-2xl shadow-sm border border-slate-200 relative break-words">
                             <p class="text-sm whitespace-pre-wrap">{{ message.content }}</p>
+                            {# Hover Buttons #}
                             <div class="absolute -bottom-2 right-2 flex items-center space-x-1 opacity-0 group-hover:opacity-100 transition-opacity duration-150">
                                 <button data-prompt="{{ message.content }}" onclick="copyPromptToImage(this)" title="Use for Image Prompt" class="bg-slate-200 hover:bg-purple-200 text-slate-600 hover:text-purple-700 p-1 rounded-full shadow-md text-xs">
                                     <svg class="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"> <path stroke-linecap="round" stroke-linejoin="round" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" /> </svg>
+                                </button>
+                                <button data-prompt="{{ message.content }}" onclick="copyPromptToVideo(this)" title="Use for Video Prompt" class="bg-slate-200 hover:bg-blue-200 text-slate-600 hover:text-blue-700 p-1 rounded-full shadow-md text-xs">
+                                    <svg class="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"> <path stroke-linecap="round" stroke-linejoin="round" d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z" /> </svg>
                                 </button>
                                 <button data-audio-text="{{ message.content }}" onclick="copyTextToAudio(this)" title="Use for Audio Generation" class="bg-slate-200 hover:bg-teal-200 text-slate-600 hover:text-teal-700 p-1 rounded-full shadow-md text-xs">
                                     <svg class="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"> <path stroke-linecap="round" stroke-linejoin="round" d="M15.536 8.464a5 5 0 010 7.072m2.828-9.9a9 9 0 010 12.728M5.586 15H4a1 1 0 01-1-1v-4a1 1 0 011-1h1.586l4.707-4.707C10.923 3.663 12 4.109 12 5v14c0 .891-1.077 1.337-1.707.707L5.586 15z" /> </svg>
@@ -272,29 +410,32 @@
                      <p class="text-slate-500 italic text-sm text-center">No messages in this chat yet.<br>Send your first message below!</p>
                  </div>
             {% endif %}
+            {# Anchor for scrolling #}
+            <div id="scroll-anchor"></div>
       </div>
 
       <!-- Chat Input Form -->
-      {# flex-shrink-0: Fixed height, pinned to bottom #}
-      <div class="flex-shrink-0 p-4 sm:p-6 border-t border-slate-200 bg-white">
+      <div class="flex-shrink-0 p-4 sm:p-6 border-t border-slate-200 bg-white shadow-inner">
           <form id="text-prompt-form" action="{{ url_for('views.generate_text_prompt') }}" method="POST" class="flex items-center space-x-3">
-              {# Hidden fields #}
+              {# Hidden fields for ALL state #}
               <input type="hidden" name="conversation_id" value="{{ active_conversation_id | default('', true) }}">
               <input type="hidden" name="image_prompt" value="{{ last_image_prompt | default('', true) }}">
               <input type="hidden" name="last_refined_prompt" value="{{ last_refined_prompt | default('', true) }}">
               <input type="hidden" name="generated_image_base64" value="{{ generated_image_base64 | default('', true) }}">
+              <input type="hidden" name="last_init_image_base64" value="{{ last_init_image_base64 | default('', true) }}">
               <input type="hidden" name="audio_text" value="{{ last_audio_text | default('', true) }}">
               <input type="hidden" name="language_code" value="{{ last_language_code | default('en', true) }}">
               <input type="hidden" name="speaker_id" value="{{ last_speaker_id | default('', true) }}">
               <input type="hidden" name="generated_audio_base64" value="{{ generated_audio_base64 | default('', true) }}">
+              <input type="hidden" name="video_prompt" value="{{ last_video_prompt | default('', true) }}">
+              <input type="hidden" name="video_status_message" value="{{ video_status_message | default('', true) }}">
 
+              {# Text Input Area #}
               <label for="topic" class="sr-only">Your Message:</label>
               <textarea id="topic" name="topic" rows="1" required class="flex-grow shadow-sm appearance-none border border-slate-300 rounded-lg py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent resize-none text-sm" placeholder="Ask for marketing ideas, content suggestions...">{{ last_topic | default('', true) }}</textarea>
-              {# *** REMOVED disabled attribute and classes *** #}
+              {# Submit Button #}
               <button type="submit" title="Send Message" class="flex-shrink-0 bg-primary hover:bg-primary-dark text-white font-semibold p-2 rounded-lg focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 transition duration-150 ease-in-out shadow-sm">
-                  <svg class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
-                      <path d="M10.894 2.553a1 1 0 00-1.788 0l-7 14a1 1 0 001.169 1.409l5-1.429A1 1 0 009 15.571V11a1 1 0 112 0v4.571a1 1 0 00.725.962l5 1.428a1 1 0 001.17-1.408l-7-14z" />
-                  </svg>
+                  <svg class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor"> <path d="M10.894 2.553a1 1 0 00-1.788 0l-7 14a1 1 0 001.169 1.409l5-1.429A1 1 0 009 15.571V11a1 1 0 112 0v4.571a1 1 0 00.725.962l5 1.428a1 1 0 001.17-1.408l-7-14z" /> </svg>
               </button>
           </form>
            <p class="text-xs text-slate-500 mt-2 text-center">MarketMind can help brainstorm ideas. Always review suggestions.</p>
@@ -309,7 +450,6 @@
 
 
 {% block scripts %}
-{# Paste the SAME JavaScript from the previous answer here #}
 <script>
  // --- Helper Functions ---
  function copyPromptToImage(buttonElement) {
@@ -342,6 +482,21 @@
     }
  }
 
+ function copyPromptToVideo(buttonElement) {
+    const promptText = buttonElement.getAttribute('data-prompt');
+    const videoPromptTextarea = document.getElementById('video_prompt');
+    if (videoPromptTextarea) {
+        videoPromptTextarea.value = promptText;
+        videoPromptTextarea.focus();
+        videoPromptTextarea.dispatchEvent(new Event('input', { bubbles: true }));
+        autoResizeTextarea(videoPromptTextarea);
+        // Open the video panel if it's closed
+        if (!isPanelOpen('video')) {
+            togglePanel('video', true);
+        }
+    }
+ }
+
  function scrollToBottom(elementId) {
      const element = document.getElementById(elementId);
      if (element) {
@@ -362,23 +517,56 @@
     textarea.style.overflowY = scrollHeight > maxHeight ? 'auto' : 'hidden';
  }
 
+ // --- Trigger video generation from generated/uploaded image ---
+ function triggerVideoFromImage(imageBase64) {
+    const hiddenImageInput = document.getElementById('init_image_base64'); // Shared hidden input for BOTH image and video forms
+    const videoPromptTextarea = document.getElementById('video_prompt');
+    const videoForm = document.getElementById('video-gen-form');
+    const imagePreview = document.getElementById('init-image-preview'); // In Image Panel
+    const imagePreviewContainer = document.getElementById('init-image-preview-container'); // In Image Panel
+    const videoInputPreview = document.getElementById('video-input-image-preview'); // In Video Panel
+    const videoInputPreviewContainer = document.getElementById('video-input-image-preview-container'); // In Video Panel
+    const videoInputPlaceholder = document.getElementById('video-input-image-placeholder'); // In Video Panel
+    const videoGenerateButton = document.getElementById('generate-video-button'); // In Video Panel
+
+    if (hiddenImageInput && videoPromptTextarea && videoForm && imagePreview && imagePreviewContainer && videoInputPreview && videoInputPreviewContainer && videoInputPlaceholder && videoGenerateButton) {
+        // 1. Set shared hidden input
+        hiddenImageInput.value = imageBase64;
+        // 2. Update previews in BOTH panels
+        const dataUrl = `data:image/png;base64,${imageBase64}`;
+        imagePreview.src = dataUrl; imagePreview.classList.remove('hidden'); imagePreviewContainer.classList.remove('hidden');
+        videoInputPreview.src = dataUrl; videoInputPreviewContainer.classList.remove('hidden'); videoInputPlaceholder.classList.add('hidden');
+        // 3. Enable video button
+        videoGenerateButton.disabled = false; videoGenerateButton.classList.remove('bg-gray-400', 'cursor-not-allowed'); videoGenerateButton.classList.add('bg-blue-600', 'hover:bg-blue-700'); videoGenerateButton.title = "Generate Video";
+        // 4. Open video panel & focus
+        if (!isPanelOpen('video')) { togglePanel('video', true); }
+        videoPromptTextarea.focus();
+        // 5. Notify user (optional)
+        // alert("Image set as input for video. Enter a motion prompt and click 'Generate Video'.");
+    } else { console.error("Missing elements for triggerVideoFromImage"); alert("Error setting up video generation."); }
+ }
+
+
  // **** Panel Toggle Logic ****
  document.addEventListener('DOMContentLoaded', () => {
     // --- Element References ---
     const panels = {
         businesses: document.getElementById('businesses-sidebar'),
         image: document.getElementById('image-panel'),
-        audio: document.getElementById('audio-panel')
+        audio: document.getElementById('audio-panel'),
+        video: document.getElementById('video-panel') // <-- Added Video Panel
     };
     const toggleButtons = {
         businesses: document.getElementById('toggle-businesses-btn'),
         image: document.getElementById('toggle-image-btn'),
-        audio: document.getElementById('toggle-audio-btn')
+        audio: document.getElementById('toggle-audio-btn'),
+        video: document.getElementById('toggle-video-btn') // <-- Added Video Toggle
     };
     const closeButtons = {
         businesses: document.getElementById('close-businesses-btn'),
         image: document.getElementById('close-image-btn'),
-        audio: document.getElementById('close-audio-btn')
+        audio: document.getElementById('close-audio-btn'),
+        video: document.getElementById('close-video-btn') // <-- Added Video Close
     };
     const mainChatArea = document.getElementById('main-chat-area');
     const chatHistory = document.getElementById('chat-history');
@@ -399,9 +587,9 @@
     function adjustMainContentMargins() {
         if (!mainChatArea) return;
         const isLeftOpen = isPanelOpen('businesses');
-        const isRightOpen = isPanelOpen('image') || isPanelOpen('audio');
-        mainChatArea.style.marginLeft = isLeftOpen ? '18rem' : '0px';
-        mainChatArea.style.marginRight = isRightOpen ? '24rem' : '0px';
+        const isRightOpen = isPanelOpen('image') || isPanelOpen('audio') || isPanelOpen('video'); // <-- Added Video
+        mainChatArea.style.marginLeft = isLeftOpen ? '18rem' : '0px'; // 72 * 0.25rem = 18rem
+        mainChatArea.style.marginRight = isRightOpen ? '24rem' : '0px'; // 96 * 0.25rem = 24rem
     }
 
 
@@ -414,30 +602,33 @@
         if (forceOpen === true) shouldBeOpen = true;
         else if (forceOpen === false) shouldBeOpen = false;
         else shouldBeOpen = !currentlyOpen;
-        if (shouldBeOpen === currentlyOpen) return;
+        if (shouldBeOpen === currentlyOpen) return; // No change needed
 
-        if (shouldBeOpen && (panelId === 'image' || panelId === 'audio')) {
-            const otherPanelId = (panelId === 'image') ? 'audio' : 'image';
-            if (isPanelOpen(otherPanelId)) {
-                const otherPanel = panels[otherPanelId];
-                 if (otherPanel) otherPanel.classList.add('translate-x-full');
-            }
+        // If opening a right-side panel, close other right-side panels
+        const rightPanelIds = ['image', 'audio', 'video'];
+        if (shouldBeOpen && rightPanelIds.includes(panelId)) {
+            rightPanelIds.forEach(id => {
+                if (id !== panelId && isPanelOpen(id)) {
+                    const otherPanel = panels[id];
+                     if (otherPanel) otherPanel.classList.add('translate-x-full'); // Close other right panels
+                }
+            });
         }
 
+        // Toggle the specific panel
         if (panelId === 'businesses') {
             panel.classList.toggle('-translate-x-full', !shouldBeOpen);
-        } else {
+        } else { // Right-side panels
             panel.classList.toggle('translate-x-full', !shouldBeOpen);
+             // Adjust z-index so the active right panel is on top
              const zIndexOpen = '20'; const zIndexClosed = '10';
-             if (panelId === 'image') {
-                 panel.style.zIndex = shouldBeOpen ? zIndexOpen : zIndexClosed;
-                 if(panels.audio) panels.audio.style.zIndex = zIndexClosed;
-             } else if (panelId === 'audio') {
-                 panel.style.zIndex = shouldBeOpen ? zIndexOpen : zIndexClosed;
-                 if(panels.image) panels.image.style.zIndex = zIndexClosed;
-             }
+             rightPanelIds.forEach(id => {
+                 if (panels[id]) {
+                     panels[id].style.zIndex = (id === panelId && shouldBeOpen) ? zIndexOpen : zIndexClosed;
+                 }
+             });
         }
-        requestAnimationFrame(adjustMainContentMargins);
+        requestAnimationFrame(adjustMainContentMargins); // Update layout after animation frame
     }
 
     // --- Event Listeners ---
@@ -448,28 +639,28 @@
         if (closeButtons[key]) closeButtons[key].addEventListener('click', (e) => { e.stopPropagation(); togglePanel(key, false); });
     });
 
-    // Click outside handler
+    // Click outside handler (closes all open panels if clicking outside main content/sidebars)
     if (dashboardContainer) {
          dashboardContainer.addEventListener('click', (e) => {
-             const clickedInsideBusiness = panels.businesses && panels.businesses.contains(e.target);
-             const clickedInsideImage = panels.image && panels.image.contains(e.target);
-             const clickedInsideAudio = panels.audio && panels.audio.contains(e.target);
+             // Check if the click target is inside any known panel or an interactive element within the main chat area
+             const clickedInsideAPanel = Object.values(panels).some(p => p && p.contains(e.target));
              const clickedInsideMainInteractive = mainChatArea && mainChatArea.contains(e.target) && e.target.closest('button, a, input, textarea, select, [role="button"], [onclick]');
-             const clickedOnMainBackground = mainChatArea && e.target === mainChatArea;
+             const clickedOnAnyToggleButton = Object.values(toggleButtons).some(b => b && b.contains(e.target)); // Prevent closing when opening
 
-             // Only close if the click is TRULY outside interactive areas
-             if (!clickedInsideBusiness && !clickedInsideImage && !clickedInsideAudio && !clickedInsideMainInteractive && !clickedOnMainBackground) {
-                  if (isPanelOpen('businesses')) togglePanel('businesses', false);
-                  if (isPanelOpen('image')) togglePanel('image', false);
-                  if (isPanelOpen('audio')) togglePanel('audio', false);
+             if (!clickedInsideAPanel && !clickedInsideMainInteractive && !clickedOnAnyToggleButton) {
+                  // Close all panels if the click was truly outside
+                  Object.keys(panels).forEach(key => {
+                      if (isPanelOpen(key)) togglePanel(key, false);
+                  });
              }
          });
      }
 
 
     // --- Initial Setup ---
-    adjustMainContentMargins();
+    adjustMainContentMargins(); // Set initial margins correctly
     if (chatHistory) {
+        // Scroll to bottom on initial load (after slight delay)
         const initialScroll = () => {
              if (chatHistory.scrollHeight > chatHistory.clientHeight) {
                 chatHistory.scrollTop = chatHistory.scrollHeight;
@@ -477,12 +668,13 @@
         };
         setTimeout(initialScroll, 50);
 
-
+        // Auto-scroll when new messages are added (if already near bottom)
         const observer = new MutationObserver((mutations) => {
             let addedNodes = false;
             for(let mutation of mutations) { if (mutation.type === 'childList' && mutation.addedNodes.length > 0) { addedNodes = true; break; } }
             if(addedNodes) {
-                 const isScrolledNearBottom = chatHistory.scrollHeight - chatHistory.clientHeight <= chatHistory.scrollTop + 150;
+                 // Check if scrolled near the bottom *before* adding new content potentially changes scrollHeight
+                 const isScrolledNearBottom = chatHistory.scrollHeight - chatHistory.clientHeight <= chatHistory.scrollTop + 150; // Threshold can be adjusted
                  if (isScrolledNearBottom) {
                     scrollToBottom('chat-history'); // Smooth scroll for new messages
                  }
@@ -494,10 +686,96 @@
     // Auto-resize textareas
     document.querySelectorAll('textarea').forEach(textarea => {
         textarea.addEventListener('input', () => autoResizeTextarea(textarea));
-        textarea.addEventListener('focus', () => autoResizeTextarea(textarea));
-        textarea.addEventListener('blur', () => autoResizeTextarea(textarea));
-        autoResizeTextarea(textarea); // Initial resize
+        textarea.addEventListener('focus', () => autoResizeTextarea(textarea)); // Optional: resize on focus too
+        textarea.addEventListener('blur', () => autoResizeTextarea(textarea)); // Optional: resize on blur
+        autoResizeTextarea(textarea); // Initial resize on load
     });
+
+    // --- Image Input Handling (SHARED STATE) ---
+    const imageUploadInput = document.getElementById('init_image_upload'); // In Image Panel
+    const imagePreviewContainer = document.getElementById('init-image-preview-container'); // In Image Panel
+    const imagePreview = document.getElementById('init-image-preview'); // In Image Panel
+    const hiddenImageInput = document.getElementById('init_image_base64'); // Shared hidden input
+    const clearImageButton = document.getElementById('clear-init-image'); // In Image Panel
+    const videoInputPreviewContainer = document.getElementById('video-input-image-preview-container'); // In Video Panel
+    const videoInputPreview = document.getElementById('video-input-image-preview'); // In Video Panel
+    const videoInputPlaceholder = document.getElementById('video-input-image-placeholder'); // In Video Panel
+    const videoGenerateButton = document.getElementById('generate-video-button'); // In Video Panel
+
+    // Function to clear shared image state and update UI in BOTH panels
+    function clearImageSelection() {
+        console.log("Clearing shared image selection");
+        if (imageUploadInput) imageUploadInput.value = null; // Clear file input value
+        if (hiddenImageInput) hiddenImageInput.value = '';
+        // Update Image Panel Preview
+        if (imagePreview) { imagePreview.src = '#'; imagePreview.classList.add('hidden'); }
+        if (imagePreviewContainer) imagePreviewContainer.classList.add('hidden');
+        // Update Video Panel Preview
+        if (videoInputPreview) { videoInputPreview.src = '#'; }
+        if (videoInputPreviewContainer) videoInputPreviewContainer.classList.add('hidden');
+        if (videoInputPlaceholder) videoInputPlaceholder.classList.remove('hidden');
+        // Disable Video Button
+        if (videoGenerateButton) {
+            videoGenerateButton.disabled = true;
+            videoGenerateButton.classList.add('bg-gray-400', 'cursor-not-allowed');
+            videoGenerateButton.classList.remove('bg-blue-600', 'hover:bg-blue-700');
+            videoGenerateButton.title = "Input image required.";
+        }
+    }
+
+    // Attach file input listener (in image panel)
+    if (imageUploadInput && hiddenImageInput && imagePreview && videoInputPreview && videoInputPreviewContainer && videoInputPlaceholder && videoGenerateButton) {
+        imageUploadInput.addEventListener('change', function(event) {
+            const file = event.target.files[0];
+            if (file && file.type.startsWith('image/')) {
+                const reader = new FileReader();
+                reader.onload = function(e) {
+                    const dataUrl = e.target.result;
+                    const base64String = dataUrl.split(',')[1]; // Get Base64 part
+                    if (base64String) {
+                        hiddenImageInput.value = base64String; // Update SHARED hidden input
+                        // Update Image Panel Preview
+                        imagePreview.src = dataUrl;
+                        imagePreview.classList.remove('hidden');
+                        imagePreviewContainer.classList.remove('hidden');
+                        // Update Video Panel Preview
+                        videoInputPreview.src = dataUrl;
+                        videoInputPreviewContainer.classList.remove('hidden');
+                        if(videoInputPlaceholder) videoInputPlaceholder.classList.add('hidden');
+                        // Enable Video Button
+                        if(videoGenerateButton){
+                             videoGenerateButton.disabled = false;
+                             videoGenerateButton.classList.remove('bg-gray-400', 'cursor-not-allowed');
+                             videoGenerateButton.classList.add('bg-blue-600', 'hover:bg-blue-700');
+                             videoGenerateButton.title = "Generate Video";
+                        }
+                    } else {
+                        console.error("Failed base64 extraction.");
+                        clearImageSelection();
+                    }
+                }
+                reader.onerror = function(err) {
+                    console.error("File read error:", err);
+                    clearImageSelection();
+                }
+                reader.readAsDataURL(file);
+            } else {
+                if(file) alert("Invalid file type. Please upload PNG, JPEG, or WEBP.");
+                clearImageSelection(); // Clear selection if invalid file or no file selected
+            }
+        });
+    } else {
+        console.warn("One or more image/video handling elements not found.");
+    }
+
+    // Attach clear button listener (in image panel)
+    if (clearImageButton) {
+        clearImageButton.addEventListener('click', (e) => {
+             e.stopPropagation(); // Prevent click-outside closing panel
+             clearImageSelection();
+        });
+    }
+    // --- End Image Input Handling ---
 
  });
 </script>
