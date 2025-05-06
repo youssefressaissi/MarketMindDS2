@@ -1,93 +1,96 @@
-{% extends "base.html" %} 
+{% extends "base.html" %}
 
-{% block title %}Sign Up{% endblock %} 
+{% block title %}Sign Up{% endblock %}
 
 {% block content %}
-<div class="mx-auto block max-w-md rounded-lg bg-white p-6 shadow-lg">
-  <h3 class="mb-6 text-center text-2xl font-bold text-[#8338ec]">Sign Up</h3>
-  <form method="POST">
-    <!-- Email input -->
-    <div class="relative mb-6">
-      <input
-        type="email"
-        class="peer block min-h-[auto] w-full rounded border border-gray-300 bg-transparent px-3 py-[0.32rem] leading-[1.6] outline-none transition-all duration-200 ease-linear focus:border-[#8338ec] focus:placeholder:opacity-100"
-        id="email"
-        name="email"
-        placeholder=" "
-        required />
-      <label
-        for="email"
-        class="pointer-events-none absolute left-3 top-0 mb-0 max-w-[90%] origin-[0_0] truncate pt-[0.37rem] leading-[1.6] text-gray-500 transition-all duration-200 ease-out peer-focus:-translate-y-[0.9rem] peer-focus:scale-[0.8] peer-focus:text-[#8338ec] peer-data-[twe-input-state-active]:-translate-y-[0.9rem] peer-data-[twe-input-state-active]:scale-[0.8] motion-reduce:transition-none"
-        >Email Address</label
-      >
-    </div>
+{# This outer div helps with overall page padding and pushes the card down from the navbar #}
+<div class="container mx-auto px-4 py-12 md:py-16 lg:py-20">  {# py-* adds padding top & bottom #}
+  <div class="mx-auto block max-w-xl rounded-lg bg-white p-8 shadow-2xl"> {# Increased max-w-xl, p-8, and shadow-2xl #}
+    <h3 class="mb-8 text-center text-3xl font-bold text-[#8338ec]">Sign Up</h3> {# Larger heading, more bottom margin #}
+    <form method="POST">
+      <!-- Email input -->
+      <div class="relative mb-6">
+        <input
+          type="email"
+          class="peer block min-h-[auto] w-full rounded border border-gray-300 bg-transparent px-4 py-3 text-base leading-[1.6] outline-none transition-all duration-200 ease-linear focus:border-[#8338ec] focus:placeholder:opacity-100" {# Increased px, py, text-base #}
+          id="email"
+          name="email"
+          placeholder=" "
+          required />
+        <label
+          for="email"
+          class="pointer-events-none absolute left-3 top-0 mb-0 max-w-[90%] origin-[0_0] truncate pt-[0.8rem] text-base leading-[1.6] text-gray-500 transition-all duration-200 ease-out peer-focus:-translate-y-[1.15rem] peer-focus:scale-[0.8] peer-focus:text-[#8338ec] peer-data-[twe-input-state-active]:-translate-y-[1.15rem] peer-data-[twe-input-state-active]:scale-[0.8] motion-reduce:transition-none" {# Adjusted pt and -translate-y for new padding/text size #}
+          >Email Address</label
+        >
+      </div>
 
-    <!-- First Name input -->
-    <div class="relative mb-6">
-      <input
-        type="text"
-        class="peer block min-h-[auto] w-full rounded border border-gray-300 bg-transparent px-3 py-[0.32rem] leading-[1.6] outline-none transition-all duration-200 ease-linear focus:border-[#8338ec] focus:placeholder:opacity-100"
-        id="firstName"
-        name="firstName"
-        placeholder=" "
-        required />
-      <label
-        for="firstName"
-        class="pointer-events-none absolute left-3 top-0 mb-0 max-w-[90%] origin-[0_0] truncate pt-[0.37rem] leading-[1.6] text-gray-500 transition-all duration-200 ease-out peer-focus:-translate-y-[0.9rem] peer-focus:scale-[0.8] peer-focus:text-[#8338ec] peer-data-[twe-input-state-active]:-translate-y-[0.9rem] peer-data-[twe-input-state-active]:scale-[0.8] motion-reduce:transition-none"
-        >First Name</label
-      >
-    </div>
+      <!-- First Name input -->
+      <div class="relative mb-6">
+        <input
+          type="text"
+          class="peer block min-h-[auto] w-full rounded border border-gray-300 bg-transparent px-4 py-3 text-base leading-[1.6] outline-none transition-all duration-200 ease-linear focus:border-[#8338ec] focus:placeholder:opacity-100" {# Increased px, py, text-base #}
+          id="firstName"
+          name="firstName"
+          placeholder=" "
+          required />
+        <label
+          for="firstName"
+          class="pointer-events-none absolute left-3 top-0 mb-0 max-w-[90%] origin-[0_0] truncate pt-[0.8rem] text-base leading-[1.6] text-gray-500 transition-all duration-200 ease-out peer-focus:-translate-y-[1.15rem] peer-focus:scale-[0.8] peer-focus:text-[#8338ec] peer-data-[twe-input-state-active]:-translate-y-[1.15rem] peer-data-[twe-input-state-active]:scale-[0.8] motion-reduce:transition-none" {# Adjusted pt and -translate-y for new padding/text size #}
+          >First Name</label
+        >
+      </div>
 
-    <!-- Password input -->
-    <div class="relative mb-6">
-      <input
-        type="password"
-        class="peer block min-h-[auto] w-full rounded border border-gray-300 bg-transparent px-3 py-[0.32rem] leading-[1.6] outline-none transition-all duration-200 ease-linear focus:border-[#8338ec] focus:placeholder:opacity-100"
-        id="password1"
-        name="password1"
-        placeholder=" "
-        required />
-      <label
-        for="password1"
-        class="pointer-events-none absolute left-3 top-0 mb-0 max-w-[90%] origin-[0_0] truncate pt-[0.37rem] leading-[1.6] text-gray-500 transition-all duration-200 ease-out peer-focus:-translate-y-[0.9rem] peer-focus:scale-[0.8] peer-focus:text-[#8338ec] peer-data-[twe-input-state-active]:-translate-y-[0.9rem] peer-data-[twe-input-state-active]:scale-[0.8] motion-reduce:transition-none"
-        >Password</label
-      >
-    </div>
+      <!-- Password input -->
+      <div class="relative mb-6">
+        <input
+          type="password"
+          class="peer block min-h-[auto] w-full rounded border border-gray-300 bg-transparent px-4 py-3 text-base leading-[1.6] outline-none transition-all duration-200 ease-linear focus:border-[#8338ec] focus:placeholder:opacity-100" {# Increased px, py, text-base #}
+          id="password1"
+          name="password1"
+          placeholder=" "
+          required />
+        <label
+          for="password1"
+          class="pointer-events-none absolute left-3 top-0 mb-0 max-w-[90%] origin-[0_0] truncate pt-[0.8rem] text-base leading-[1.6] text-gray-500 transition-all duration-200 ease-out peer-focus:-translate-y-[1.15rem] peer-focus:scale-[0.8] peer-focus:text-[#8338ec] peer-data-[twe-input-state-active]:-translate-y-[1.15rem] peer-data-[twe-input-state-active]:scale-[0.8] motion-reduce:transition-none" {# Adjusted pt and -translate-y for new padding/text size #}
+          >Password</label
+        >
+      </div>
 
-    <!-- Confirm Password input -->
-    <div class="relative mb-6">
-      <input
-        type="password"
-        class="peer block min-h-[auto] w-full rounded border border-gray-300 bg-transparent px-3 py-[0.32rem] leading-[1.6] outline-none transition-all duration-200 ease-linear focus:border-[#8338ec] focus:placeholder:opacity-100"
-        id="password2"
-        name="password2"
-        placeholder=" "
-        required />
-      <label
-        for="password2"
-        class="pointer-events-none absolute left-3 top-0 mb-0 max-w-[90%] origin-[0_0] truncate pt-[0.37rem] leading-[1.6] text-gray-500 transition-all duration-200 ease-out peer-focus:-translate-y-[0.9rem] peer-focus:scale-[0.8] peer-focus:text-[#8338ec] peer-data-[twe-input-state-active]:-translate-y-[0.9rem] peer-data-[twe-input-state-active]:scale-[0.8] motion-reduce:transition-none"
-        >Confirm Password</label
-      >
-    </div>
+      <!-- Confirm Password input -->
+      <div class="relative mb-6">
+        <input
+          type="password"
+          class="peer block min-h-[auto] w-full rounded border border-gray-300 bg-transparent px-4 py-3 text-base leading-[1.6] outline-none transition-all duration-200 ease-linear focus:border-[#8338ec] focus:placeholder:opacity-100" {# Increased px, py, text-base #}
+          id="password2"
+          name="password2"
+          placeholder=" "
+          required />
+        <label
+          for="password2"
+          class="pointer-events-none absolute left-3 top-0 mb-0 max-w-[90%] origin-[0_0] truncate pt-[0.8rem] text-base leading-[1.6] text-gray-500 transition-all duration-200 ease-out peer-focus:-translate-y-[1.15rem] peer-focus:scale-[0.8] peer-focus:text-[#8338ec] peer-data-[twe-input-state-active]:-translate-y-[1.15rem] peer-data-[twe-input-state-active]:scale-[0.8] motion-reduce:transition-none" {# Adjusted pt and -translate-y for new padding/text size #}
+          >Confirm Password</label
+        >
+      </div>
 
-    <!-- Submit button -->
-    <button
-      type="submit"
-      class="w-full rounded bg-[#8338ec] px-6 py-3 text-sm font-medium uppercase leading-normal text-white shadow-md transition duration-150 ease-in-out hover:bg-[#6a2bc4] hover:shadow-lg focus:bg-[#6a2bc4] focus:shadow-lg focus:outline-none focus:ring-0 active:bg-[#5a24b0] active:shadow-lg"
-      data-twe-ripple-init
-      data-twe-ripple-color="light">
-      Sign Up
-    </button>
+      <!-- Submit button -->
+      <button
+        type="submit"
+        class="w-full rounded bg-[#8338ec] px-6 py-3.5 text-base font-medium uppercase leading-normal text-white shadow-md transition duration-150 ease-in-out hover:bg-[#6a2bc4] hover:shadow-lg focus:bg-[#6a2bc4] focus:shadow-lg focus:outline-none focus:ring-0 active:bg-[#5a24b0] active:shadow-lg" {# Increased py and text-base #}
+        data-twe-ripple-init
+        data-twe-ripple-color="light">
+        Sign Up
+      </button>
 
-    <!-- Login link -->
-    <p class="mt-6 text-center text-gray-600">
-      Already have an account?
-      <a
-        href="/login"
-        class="text-[#8338ec] hover:text-[#6a2bc4] focus:outline-none"
-        >Login</a
-      >
-    </p>
-  </form>
+      <!-- Login link -->
+      <p class="mt-8 text-center text-gray-600"> {# Increased mt #}
+        Already have an account?
+        <a
+          href="/login"
+          class="text-[#8338ec] hover:text-[#6a2bc4] focus:outline-none"
+          >Login</a
+        >
+      </p>
+    </form>
+  </div>
 </div>
 {% endblock %}

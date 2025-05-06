@@ -67,8 +67,11 @@ def get_available_speakers(xtts_api_url_base):
         print("WARN: XTTS_API_URL not configured, cannot fetch speakers.")
         return []
     try:
-        # Assume common endpoint, verify with your specific XTTS API server docs
-        speakers_endpoint = f"{xtts_api_url_base}/speakers_list"
+
+        # !!! CONFIRM this endpoint path from daswer123/xtts-api-server /docs !!!
+        # Common endpoints: '/speakers_list', '/speakers', '/list_speakers'
+        speakers_endpoint = f"{xtts_api_url_base}/speakers" # Verify this path!
+
         print(f"DEBUG: Fetching speakers from {speakers_endpoint}")
         response = requests.get(speakers_endpoint, timeout=15)
         response.raise_for_status()
