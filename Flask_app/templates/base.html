@@ -3,9 +3,7 @@
 <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <!-- Tailwind CSS via CDN -->
     <script src="https://cdn.tailwindcss.com"></script>
-    {# Optional: Add custom theme colors if needed #}
     <script>
       tailwind.config = {
         theme: {
@@ -19,30 +17,33 @@
       }
     </script>
     <title>{% block title %}Home{% endblock %} - MarketMind</title>
-    {# Add specific styles needed by base layout if any #}
     <style>
-        /* Ensure HTML and Body take full height for flex column layout */
         html, body { height: 100%; }
-        /* Custom scrollbar styles (optional) - Apply where needed, e.g., #chat-history */
-        .scrollbar-thin { scrollbar-width: thin; scrollbar-color: #a3a3a3 #f1f5f9; } /* thumb track */
+        .scrollbar-thin { scrollbar-width: thin; scrollbar-color: #a3a3a3 #f1f5f9; }
         .scrollbar-thin::-webkit-scrollbar { width: 6px; }
         .scrollbar-thin::-webkit-scrollbar-track { background: #f1f5f9; border-radius: 3px;}
         .scrollbar-thin::-webkit-scrollbar-thumb { background-color: #a3a3a3; border-radius: 3px; border: 1px solid #f1f5f9; }
     </style>
 </head>
-{# Body is the main flex container, ensuring it takes at least screen height #}
 <body class="bg-gray-50 flex flex-col min-h-screen">
 
-    {# Navbar: Fixed height #}
     <nav class="bg-white shadow-lg px-4 py-3 flex-shrink-0 z-50 relative">
         <div class="max-w-6xl mx-auto">
             <div class="flex justify-between items-center">
                 <!-- Logo/Brand -->
-                <div>
+                <div class="flex-shrink-0">
                     <a href="/" class="text-2xl font-bold text-primary">MarketMind</a>
                 </div>
-                <!-- Desktop Menu -->
-                <div class="hidden md:flex items-center space-x-4">
+
+                <!-- Dashboard Specific Controls (Desktop) - Centered -->
+                <div class="hidden md:flex items-center space-x-2 flex-grow justify-center px-4">
+                    {% block navbar_dashboard_controls_desktop %}
+                    {# This block will be filled by dashboard.html if it's the active page #}
+                    {% endblock %}
+                </div>
+
+                <!-- Original Desktop Menu (Right Aligned) -->
+                <div class="hidden md:flex items-center space-x-4 flex-shrink-0">
                     {% if user.is_authenticated %}
                         <a href="{{ url_for('views.dashboard') }}" class="px-3 py-2 rounded-md text-sm font-medium {% if request.endpoint == 'views.dashboard' %} text-primary font-semibold {% else %} text-gray-700 hover:bg-gray-100 hover:text-gray-900 {% endif %}">Dashboard</a>
                         <a href="{{ url_for('auth.logout') }}" class="px-4 py-2 rounded-md bg-primary text-white hover:bg-primary-dark transition text-sm font-medium">Logout</a>
@@ -52,8 +53,9 @@
                         <a href="{{ url_for('auth.sign_up') }}" class="px-4 py-2 rounded-md bg-primary text-white hover:bg-primary-dark transition text-sm font-medium">Sign Up</a>
                     {% endif %}
                 </div>
+
                 <!-- Mobile menu button -->
-                <div class="md:hidden">
+                <div class="md:hidden flex-shrink-0">
                     <button id="mobile-menu-button" class="text-gray-500 hover:text-gray-600 focus:outline-none">
                         <svg class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"/>
@@ -61,8 +63,15 @@
                     </button>
                 </div>
             </div>
+
             <!-- Mobile Menu -->
             <div id="mobile-menu" class="md:hidden hidden mt-4 pb-4 border-t border-gray-200">
+                 {# Dashboard Specific Controls for Mobile - Added at the top of mobile menu #}
+                 {% block navbar_dashboard_controls_mobile %}
+                 {# This block will be filled by dashboard.html #}
+                 {% endblock %}
+
+                 {# Original Mobile Menu Items #}
                  {% if user.is_authenticated %}
                     <a href="{{ url_for('views.dashboard') }}" class="block px-3 py-2 rounded-md font-medium {% if request.endpoint == 'views.dashboard' %} text-primary bg-indigo-50 {% else %} text-gray-700 hover:bg-gray-100 hover:text-gray-900 {% endif %}">Dashboard</a>
                     <a href="{{ url_for('auth.logout') }}" class="block w-full text-left px-3 py-2 mt-2 rounded-md bg-primary text-white hover:bg-primary-dark">Logout</a>
@@ -75,7 +84,6 @@
         </div>
     </nav>
 
-    {# Flash messages: Fixed height #}
     {% with messages = get_flashed_messages(with_categories=true) %}
         {% if messages %}
             <div class="w-full flex-shrink-0 z-40 relative">
@@ -90,22 +98,14 @@
         {% endif %}
     {% endwith %}
 
-    {# Main content area wrapper #}
-    {# flex-grow: Takes remaining vertical space #}
-    {# flex flex-col: Allows children to use flex properties like flex-grow #}
-    {# relative: Stacking context for absolute positioned children if needed #}
-    {# *** overflow-hidden: CRITICAL - Prevents this container itself from scrolling *** #}
     <main id="main-content" class="flex-grow flex flex-col relative overflow-hidden">
          {% block content %}
-            {# Default content for pages NOT overriding this block #}
             <div class="max-w-6xl w-full mx-auto px-4 py-8">
                 <p>Default Content Area - Override 'content' block in child templates.</p>
-                <p>This area scrolls normally within the page.</p>
             </div>
          {% endblock %}
     </main>
 
-    {# Mobile menu toggle script #}
     <script>
         const menuButton = document.getElementById('mobile-menu-button');
         const menu = document.getElementById('mobile-menu');
@@ -121,9 +121,6 @@
             });
         }
     </script>
-
-    {# Allow pages to add specific scripts AFTER the main content #}
     {% block scripts %}{% endblock %}
-
 </body>
 </html>
