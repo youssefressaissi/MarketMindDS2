@@ -72,7 +72,7 @@ services:
     container_name: automatic1111_gpu
     ports:
       - "${WEBUI_PORT:-7860}:7860"
-    image: sha256:a6c3d38d394d926b0861c918d4bb5ecffddf6cb026d97c838837b7dffe02efe4 # Using existing image hash
+    build: ./services/AUTOMATIC1111/ # Assuming this build context exists
     environment:
       - CLI_ARGS=--allow-code --medvram --xformers --enable-insecure-extension-access --api --listen
 

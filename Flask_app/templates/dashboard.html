@@ -4,8 +4,13 @@
 {% block title %}Dashboard - MarketMind AI{% endblock %}
 
 {% block content %}
-{# Main dashboard container - fills the 'main#main-content' area from base.html #}
-<div class="relative flex h-full bg-slate-50 overflow-hidden"> {# Root overflow hidden for sidebars #}
+{# Main dashboard container #}
+<div class="relative flex h-full bg-slate-50 overflow-hidden">
+
+  <!-- **** SHARED HIDDEN INPUT FOR IMAGE STATE **** -->
+  <input type="hidden" id="shared_init_image_base64" value="{{ last_init_image_base64 | default('', true) }}">
+  <!-- ********************************************* -->
+
 
   <!-- **** SLIDE-OUT Left Sidebar (Conversations) **** -->
   <aside id="businesses-sidebar" class="absolute top-0 left-0 z-30 h-full w-72 flex-shrink-0 bg-slate-100 border-r border-slate-300 shadow-lg flex flex-col transition-transform duration-300 ease-in-out transform -translate-x-full">
@@ -49,7 +54,7 @@
       </div>
       {# Content - Image Generation Form and Display #}
       <form id="image-gen-form" action="{{ url_for('views.generate_image') }}" method="POST" class="p-4 sm:p-6 flex-shrink-0">
-          {# Hidden fields to preserve state #}
+          {# Hidden fields #}
           <input type="hidden" name="conversation_id" value="{{ active_conversation_id | default('', true) }}">
           <input type="hidden" name="topic" value="{{ last_topic | default('', true) }}">
           <input type="hidden" name="audio_text" value="{{ last_audio_text | default('', true) }}">
@@ -58,9 +63,7 @@
           <input type="hidden" name="generated_audio_base64" value="{{ generated_audio_base64 | default('', true) }}">
           <input type="hidden" name="video_prompt" value="{{ last_video_prompt | default('', true) }}">
           <input type="hidden" name="video_status_message" value="{{ video_status_message | default('', true) }}">
-
-          {# SHARED Hidden input for Base64 Image Data #}
-          <input type="hidden" id="init_image_base64" name="init_image_base64" value="{{ last_init_image_base64 | default('', true) }}">
+          <input type="hidden" name="last_init_image_base64" value="{{ last_init_image_base64 | default('', true) }}"> {# Carries shared image state for the form #}
 
           {# Text Prompt Input #}
           <div class="mb-4">
@@ -69,7 +72,7 @@
               <p class="text-xs text-slate-500 mt-1">Describe the image (required).</p>
           </div>
 
-          {# Input Image Section (Upload and Preview - Shared State) #}
+          {# Input Image Section (Upload and Preview - Affects Shared State) #}
           <div class="mb-4 border border-slate-200 rounded-lg p-3 bg-slate-50">
               <label for="init_image_upload" class="block text-slate-700 text-sm font-semibold mb-2">Input Image (Optional for Img2Img / Required for Img2Vid)</label>
               <input type="file" id="init_image_upload" name="init_image_upload_file" accept="image/png, image/jpeg, image/webp" class="block w-full text-sm text-slate-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-purple-50 file:text-purple-700 hover:file:bg-purple-100 mb-2 cursor-pointer"/>
@@ -85,7 +88,7 @@
               <p class="text-xs text-slate-500 mt-1">Upload an image OR use one generated below. This image will be used for Img2Img or Video Generation.</p>
           </div>
           {# Submit Button for Image Generation #}
-          <button type="submit" class="w-full bg-purple-600 hover:bg-purple-700 text-white font-semibold py-2.5 px-4 rounded-lg focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-purple-500 transition duration-150 ease-in-out shadow-sm text-sm {% if not active_conversation_id %} disabled bg-gray-400 cursor-not-allowed {% endif %}" {% if not active_conversation_id %} title="Please select or start a business chat first." {% endif %}>
+          <button type="submit" id="image-submit-button" class="w-full bg-purple-600 hover:bg-purple-700 text-white font-semibold py-2.5 px-4 rounded-lg focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-purple-500 transition duration-150 ease-in-out shadow-sm text-sm {% if not active_conversation_id %} disabled bg-gray-400 cursor-not-allowed {% endif %}" {% if not active_conversation_id %} title="Please select or start a business chat first." {% endif %}>
               Generate Image
           </button>
       </form>
@@ -133,7 +136,7 @@
                     </div>
                 </div>
            {% elif image_error %}
-               <div class="flex-grow flex items-center justify-center text-red-600 italic text-sm">Image generation failed. See error below.</div>
+               <div class-="flex-grow flex items-center justify-center text-red-600 italic text-sm">Image generation failed. See error below.</div>
            {% else %}
                <div class="flex-grow flex items-center justify-center text-slate-500 italic text-sm">Generated or uploaded input image will appear here.</div>
            {% endif %}
@@ -144,6 +147,11 @@
                <span class="block mt-1 whitespace-pre-wrap">{{ image_error }}</span>
            </div>
            {% endif %}
+           {# Loading Indicator #}
+           <div id="image-loading-indicator" class="hidden mt-4 text-center flex items-center justify-center">
+               <div class="spinner mr-2"></div>
+               <span>Generating Image...</span>
+           </div>
       </div>
   </aside>
   <!-- **** End Right Image Panel **** -->
@@ -165,9 +173,10 @@
            <input type="hidden" name="image_prompt" value="{{ last_image_prompt | default('', true) }}">
            <input type="hidden" name="last_refined_prompt" value="{{ last_refined_prompt | default('', true) }}">
            <input type="hidden" name="generated_image_base64" value="{{ generated_image_base64 | default('', true) }}">
-           <input type="hidden" name="last_init_image_base64" value="{{ last_init_image_base64 | default('', true) }}">
            <input type="hidden" name="video_prompt" value="{{ last_video_prompt | default('', true) }}">
            <input type="hidden" name="video_status_message" value="{{ video_status_message | default('', true) }}">
+           <input type="hidden" name="last_init_image_base64" value="{{ last_init_image_base64 | default('', true) }}"> {# Carries shared image state for the form #}
+
 
            {# Language #}
            <div class="mb-4">
@@ -203,7 +212,7 @@
                 <p class="text-xs text-slate-500 mt-1">Use text from chat or write your own script.</p>
            </div>
            {# Submit #}
-           <button type="submit" class="w-full text-white font-semibold py-2.5 px-4 rounded-lg focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-teal-500 transition duration-150 ease-in-out shadow-sm text-sm {% if not active_conversation_id or not available_speakers %} bg-gray-400 cursor-not-allowed {% else %} bg-teal-600 hover:bg-teal-700 {% endif %}" {% if not active_conversation_id or not available_speakers %} disabled {% endif %} title="{% if not active_conversation_id %}Please select or start a business chat first.{% elif not available_speakers %}No speakers available for generation.{% else %}Generate Audio{% endif %}">
+           <button type="submit" id="audio-submit-button" class="w-full text-white font-semibold py-2.5 px-4 rounded-lg focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-teal-500 transition duration-150 ease-in-out shadow-sm text-sm {% if not active_conversation_id or not available_speakers %} bg-gray-400 cursor-not-allowed {% else %} bg-teal-600 hover:bg-teal-700 {% endif %}" {% if not active_conversation_id or not available_speakers %} disabled {% endif %} title="{% if not active_conversation_id %}Please select or start a business chat first.{% elif not available_speakers %}No speakers available for generation.{% else %}Generate Audio{% endif %}">
                 Generate Audio
            </button>
       </form>
@@ -236,6 +245,11 @@
                <span class="block mt-1">{{ audio_error }}</span>
            </div>
            {% endif %}
+            {# Loading Indicator #}
+           <div id="audio-loading-indicator" class="hidden mt-4 text-center flex items-center justify-center">
+               <div class="spinner mr-2"></div>
+               <span>Generating Audio...</span>
+           </div>
       </div>
   </aside>
   <!-- **** End Right Audio Panel **** -->
@@ -261,13 +275,13 @@
            <input type="hidden" name="language_code" value="{{ last_language_code | default('en', true) }}">
            <input type="hidden" name="speaker_id" value="{{ last_speaker_id | default('', true) }}">
            <input type="hidden" name="generated_audio_base64" value="{{ generated_audio_base64 | default('', true) }}">
-           {# --- SHARED IMAGE STATE - Passed to backend --- #}
-           <input type="hidden" id="video_init_image_base64_hidden" name="last_init_image_base64" value="{{ last_init_image_base64 | default('', true) }}">
+           {# === ADD Hidden input specifically for this form to carry the image state === #}
+           <input type="hidden" id="video_form_init_image_base64" name="last_init_image_base64" value="{{ last_init_image_base64 | default('', true) }}">
 
-           {# --- Display Input Image --- #}
+           {# --- Display Input Image (Reads from shared state)--- #}
            <div class="mb-4 border border-slate-200 rounded-lg p-3 bg-slate-50">
                 <label class="block text-slate-700 text-sm font-semibold mb-2">Input Image for Video</label>
-                <div id="video-input-image-preview-container" class="{% if not last_init_image_base64 %}hidden{% endif %}">
+                <div id="video-input-image-preview-container" class="mt-2 {% if not last_init_image_base64 %}hidden{% endif %}">
                     <div class="relative group w-32 h-32 border border-slate-300 rounded overflow-hidden bg-white flex items-center justify-center">
                         <img id="video-input-image-preview" src="{{ 'data:image/png;base64,' ~ last_init_image_base64 if last_init_image_base64 else '#' }}" alt="Input image for video" class="w-full h-full object-contain">
                     </div>
@@ -276,15 +290,15 @@
                  <p class="text-xs text-slate-500 mt-1 {% if not last_init_image_base64 %}hidden{% endif %}"> Image from Visual panel is used. </p>
             </div>
 
-           {# Video Prompt Input #}
+           {# Video Prompt Input - REMOVED 'required' attribute #}
            <div class="mb-4">
-                <label for="video_prompt" class="block text-slate-700 text-sm font-semibold mb-2"> Video Motion Prompt: </label>
-                <textarea id="video_prompt" name="video_prompt" rows="3" required class="shadow-sm appearance-none border border-slate-300 rounded-lg w-full py-2 px-3 text-gray-700 text-sm leading-tight focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-y" placeholder="Describe desired animation or motion...">{{ last_video_prompt | default('', true) }}</textarea>
-                <p class="text-xs text-slate-500 mt-1">Describe how the image should animate.</p>
+                <label for="video_prompt" class="block text-slate-700 text-sm font-semibold mb-2"> Video Motion Description (Optional): </label>
+                <textarea id="video_prompt" name="video_prompt" rows="3" class="shadow-sm appearance-none border border-slate-300 rounded-lg w-full py-2 px-3 text-gray-700 text-sm leading-tight focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-y" placeholder="Describe desired animation or motion...">{{ last_video_prompt | default('', true) }}</textarea>
+                <p class="text-xs text-slate-500 mt-1">Describe how the image should animate (optional for this workflow).</p>
            </div>
 
-           {# Submit Button #}
-           <button type="submit" id="generate-video-button" class="w-full text-white font-semibold py-2.5 px-4 rounded-lg focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition duration-150 ease-in-out shadow-sm text-sm {% if not active_conversation_id or not last_init_image_base64 %} bg-gray-400 cursor-not-allowed {% else %} bg-blue-600 hover:bg-blue-700 {% endif %}" {% if not active_conversation_id or not last_init_image_base64 %} disabled {% endif %} title="{% if not active_conversation_id %}Select chat.{% elif not last_init_image_base64 %}Input image required.{% else %}Generate Video{% endif %}">
+           {# Submit Button - Enabled based on image presence #}
+           <button type="submit" id="video-submit-button" class="w-full text-white font-semibold py-2.5 px-4 rounded-lg focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition duration-150 ease-in-out shadow-sm text-sm {% if not active_conversation_id or not last_init_image_base64 %} bg-gray-400 cursor-not-allowed {% else %} bg-blue-600 hover:bg-blue-700 {% endif %}" {% if not active_conversation_id or not last_init_image_base64 %} disabled {% endif %} title="{% if not active_conversation_id %}Select chat first.{% elif not last_init_image_base64 %}Input image required.{% else %}Generate Video{% endif %}">
                 Generate Video (GIF)
             </button>
       </form>
@@ -300,16 +314,18 @@
                     <strong class="font-semibold">Status:</strong>
                     <span class="block mt-1 whitespace-pre-wrap">{{ video_status_message }}</span>
                 </div>
-                {% if last_video_prompt %}
-                 <div class="text-xs text-slate-600 text-left bg-slate-100 p-3 rounded-md border border-slate-200">
-                     <p><strong>Prompt Used:</strong><br> <code class="block bg-white p-1 rounded border text-slate-800 break-words">{{ last_video_prompt }}</code> </p>
-                 </div>
-                {% endif %}
-                 {# --- Hint for manual check --- #}
-                 <p class="text-xs text-slate-500 mt-3">Check the <code class="text-xs bg-slate-200 px-1 py-0.5 rounded">./output</code> folder on your host machine for the generated GIF after a short wait.</p>
+                 {# Hint for manual check #}
+                 <p class="text-xs text-slate-500 mt-3">Check the <code class="text-xs bg-slate-200 px-1 py-0.5 rounded">./output</code> folder on your host machine for the generated GIF after processing completes.</p>
            {% else %}
                  <div class="flex-grow flex items-center justify-center text-slate-500 italic text-sm">Video generation status will appear here.<br>(Requires an input image from the Visual panel)</div>
            {% endif %}
+            {# Loading Indicator #}
+           <div id="video-loading-indicator" class="hidden mt-4 text-center flex items-center justify-center">
+               <div class="spinner mr-2"></div>
+               <span>Generating Video...</span>
+           </div>
+           {# Future location for displaying the video if implemented #}
+           {# <div id="video-display-area"></div> #}
       </div>
   </aside>
   <!-- **** End Right Video Panel **** -->
@@ -325,7 +341,6 @@
           </button>
           {# Chat Title #}
           <h1 class="flex-grow text-xl sm:text-2xl font-semibold text-slate-800 truncate text-center">
-              {# Try to display convo title or a default #}
               {% set display_title = 'New Business Chat' %} {# Default title #}
               {% if active_conversation_id and all_conversations %}
                   {% for convo in all_conversations %}
@@ -417,28 +432,31 @@
       <!-- Chat Input Form -->
       <div class="flex-shrink-0 p-4 sm:p-6 border-t border-slate-200 bg-white shadow-inner">
           <form id="text-prompt-form" action="{{ url_for('views.generate_text_prompt') }}" method="POST" class="flex items-center space-x-3">
-              {# Hidden fields for ALL state #}
+              {# Hidden fields for state #}
               <input type="hidden" name="conversation_id" value="{{ active_conversation_id | default('', true) }}">
               <input type="hidden" name="image_prompt" value="{{ last_image_prompt | default('', true) }}">
               <input type="hidden" name="last_refined_prompt" value="{{ last_refined_prompt | default('', true) }}">
               <input type="hidden" name="generated_image_base64" value="{{ generated_image_base64 | default('', true) }}">
-              <input type="hidden" name="last_init_image_base64" value="{{ last_init_image_base64 | default('', true) }}">
               <input type="hidden" name="audio_text" value="{{ last_audio_text | default('', true) }}">
               <input type="hidden" name="language_code" value="{{ last_language_code | default('en', true) }}">
               <input type="hidden" name="speaker_id" value="{{ last_speaker_id | default('', true) }}">
               <input type="hidden" name="generated_audio_base64" value="{{ generated_audio_base64 | default('', true) }}">
               <input type="hidden" name="video_prompt" value="{{ last_video_prompt | default('', true) }}">
               <input type="hidden" name="video_status_message" value="{{ video_status_message | default('', true) }}">
+              <input type="hidden" name="last_init_image_base64" value="{{ last_init_image_base64 | default('', true) }}"> {# Carries shared image state for the form #}
 
-              {# Text Input Area #}
               <label for="topic" class="sr-only">Your Message:</label>
               <textarea id="topic" name="topic" rows="1" required class="flex-grow shadow-sm appearance-none border border-slate-300 rounded-lg py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent resize-none text-sm" placeholder="Ask for marketing ideas, content suggestions...">{{ last_topic | default('', true) }}</textarea>
-              {# Submit Button #}
-              <button type="submit" title="Send Message" class="flex-shrink-0 bg-primary hover:bg-primary-dark text-white font-semibold p-2 rounded-lg focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 transition duration-150 ease-in-out shadow-sm">
+              <button type="submit" id="text-submit-button" title="Send Message" class="flex-shrink-0 bg-primary hover:bg-primary-dark text-white font-semibold p-2 rounded-lg focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 transition duration-150 ease-in-out shadow-sm">
                   <svg class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor"> <path d="M10.894 2.553a1 1 0 00-1.788 0l-7 14a1 1 0 001.169 1.409l5-1.429A1 1 0 009 15.571V11a1 1 0 112 0v4.571a1 1 0 00.725.962l5 1.428a1 1 0 001.17-1.408l-7-14z" /> </svg>
               </button>
           </form>
            <p class="text-xs text-slate-500 mt-2 text-center">MarketMind can help brainstorm ideas. Always review suggestions.</p>
+            {# Loading Indicator #}
+           <div id="text-loading-indicator" class="hidden mt-2 text-center flex items-center justify-center text-slate-600">
+               <div class="spinner spinner-small mr-2"></div>
+               <span>Thinking...</span>
+           </div>
       </div>
 
   </main>
@@ -457,13 +475,10 @@
     const imagePromptTextarea = document.getElementById('image_prompt');
     if (imagePromptTextarea) {
         imagePromptTextarea.value = promptText;
-        imagePromptTextarea.focus(); // Focus to potentially trigger resize/scroll
-        imagePromptTextarea.dispatchEvent(new Event('input', { bubbles: true })); // Ensure reactivity
-        autoResizeTextarea(imagePromptTextarea); // Explicitly resize
-        // Open the image panel if it's closed
-        if (!isPanelOpen('image')) {
-            togglePanel('image', true);
-        }
+        imagePromptTextarea.focus();
+        imagePromptTextarea.dispatchEvent(new Event('input', { bubbles: true }));
+        autoResizeTextarea(imagePromptTextarea);
+        if (!isPanelOpen('image')) { togglePanel('image', true); }
     }
  }
 
@@ -475,10 +490,7 @@
         audioTextTextarea.focus();
         audioTextTextarea.dispatchEvent(new Event('input', { bubbles: true }));
         autoResizeTextarea(audioTextTextarea);
-        // Open the audio panel if it's closed
-        if (!isPanelOpen('audio')) {
-             togglePanel('audio', true);
-        }
+        if (!isPanelOpen('audio')) { togglePanel('audio', true); }
     }
  }
 
@@ -490,59 +502,50 @@
         videoPromptTextarea.focus();
         videoPromptTextarea.dispatchEvent(new Event('input', { bubbles: true }));
         autoResizeTextarea(videoPromptTextarea);
-        // Open the video panel if it's closed
-        if (!isPanelOpen('video')) {
-            togglePanel('video', true);
-        }
+        if (!isPanelOpen('video')) { togglePanel('video', true); }
     }
  }
 
  function scrollToBottom(elementId) {
      const element = document.getElementById(elementId);
-     if (element) {
-         // Use smooth scroll for better UX, but only if element is scrollable
-         if (element.scrollHeight > element.clientHeight) {
-            element.scrollTo({ top: element.scrollHeight, behavior: 'smooth' });
-         }
+     if (element && element.scrollHeight > element.clientHeight) {
+        element.scrollTo({ top: element.scrollHeight, behavior: 'smooth' });
      }
  }
 
  function autoResizeTextarea(textarea) {
     if (!textarea) return;
-    textarea.style.height = 'auto'; // Reset height to recalculate scrollHeight
-    const maxHeight = 160; // Approx 4-5 lines max height (adjust as needed)
+    textarea.style.height = 'auto';
+    const maxHeight = 160; // Adjust as needed
     const scrollHeight = textarea.scrollHeight;
-    // Apply scrollHeight up to maxHeight. Add a little buffer (e.g., 2px) to avoid premature scrollbar
     textarea.style.height = Math.min(scrollHeight, maxHeight) + 2 + 'px';
     textarea.style.overflowY = scrollHeight > maxHeight ? 'auto' : 'hidden';
  }
 
- // --- Trigger video generation from generated/uploaded image ---
+ // --- Trigger video generation using the shared image state ---
  function triggerVideoFromImage(imageBase64) {
-    const hiddenImageInput = document.getElementById('init_image_base64'); // Shared hidden input for BOTH image and video forms
+    const sharedHiddenImageInput = document.getElementById('shared_init_image_base64');
     const videoPromptTextarea = document.getElementById('video_prompt');
-    const videoForm = document.getElementById('video-gen-form');
-    const imagePreview = document.getElementById('init-image-preview'); // In Image Panel
-    const imagePreviewContainer = document.getElementById('init-image-preview-container'); // In Image Panel
-    const videoInputPreview = document.getElementById('video-input-image-preview'); // In Video Panel
-    const videoInputPreviewContainer = document.getElementById('video-input-image-preview-container'); // In Video Panel
-    const videoInputPlaceholder = document.getElementById('video-input-image-placeholder'); // In Video Panel
-    const videoGenerateButton = document.getElementById('generate-video-button'); // In Video Panel
+    const imagePreview = document.getElementById('init_image_preview'); // In Image Panel
+    const imagePreviewContainer = document.getElementById('init-image-preview-container');
+    const videoInputPreview = document.getElementById('video-input-image-preview');
+    const videoInputPreviewContainer = document.getElementById('video-input-image-preview-container');
+    const videoInputPlaceholder = document.getElementById('video-input-image-placeholder');
+    const videoGenerateButton = document.getElementById('generate-video-button');
+    // *** Get the hidden input INSIDE the video form ***
+    const videoFormImageInput = document.getElementById('video_form_init_image_base64');
 
-    if (hiddenImageInput && videoPromptTextarea && videoForm && imagePreview && imagePreviewContainer && videoInputPreview && videoInputPreviewContainer && videoInputPlaceholder && videoGenerateButton) {
-        // 1. Set shared hidden input
-        hiddenImageInput.value = imageBase64;
-        // 2. Update previews in BOTH panels
+    if (sharedHiddenImageInput && videoPromptTextarea && imagePreview && imagePreviewContainer && videoInputPreview && videoInputPreviewContainer && videoInputPlaceholder && videoGenerateButton && videoFormImageInput) {
+        sharedHiddenImageInput.value = imageBase64;
+        videoFormImageInput.value = imageBase64; // *** Also update the form-specific input ***
         const dataUrl = `data:image/png;base64,${imageBase64}`;
+        // Update previews
         imagePreview.src = dataUrl; imagePreview.classList.remove('hidden'); imagePreviewContainer.classList.remove('hidden');
         videoInputPreview.src = dataUrl; videoInputPreviewContainer.classList.remove('hidden'); videoInputPlaceholder.classList.add('hidden');
-        // 3. Enable video button
+        // Enable Video Button
         videoGenerateButton.disabled = false; videoGenerateButton.classList.remove('bg-gray-400', 'cursor-not-allowed'); videoGenerateButton.classList.add('bg-blue-600', 'hover:bg-blue-700'); videoGenerateButton.title = "Generate Video";
-        // 4. Open video panel & focus
+        // Open video panel if closed
         if (!isPanelOpen('video')) { togglePanel('video', true); }
-        videoPromptTextarea.focus();
-        // 5. Notify user (optional)
-        // alert("Image set as input for video. Enter a motion prompt and click 'Generate Video'.");
     } else { console.error("Missing elements for triggerVideoFromImage"); alert("Error setting up video generation."); }
  }
 
@@ -550,181 +553,107 @@
  // **** Panel Toggle Logic ****
  document.addEventListener('DOMContentLoaded', () => {
     // --- Element References ---
-    const panels = {
-        businesses: document.getElementById('businesses-sidebar'),
-        image: document.getElementById('image-panel'),
-        audio: document.getElementById('audio-panel'),
-        video: document.getElementById('video-panel') // <-- Added Video Panel
-    };
-    const toggleButtons = {
-        businesses: document.getElementById('toggle-businesses-btn'),
-        image: document.getElementById('toggle-image-btn'),
-        audio: document.getElementById('toggle-audio-btn'),
-        video: document.getElementById('toggle-video-btn') // <-- Added Video Toggle
-    };
-    const closeButtons = {
-        businesses: document.getElementById('close-businesses-btn'),
-        image: document.getElementById('close-image-btn'),
-        audio: document.getElementById('close-audio-btn'),
-        video: document.getElementById('close-video-btn') // <-- Added Video Close
-    };
+    const panels = { businesses: document.getElementById('businesses-sidebar'), image: document.getElementById('image-panel'), audio: document.getElementById('audio-panel'), video: document.getElementById('video-panel') };
+    const toggleButtons = { businesses: document.getElementById('toggle-businesses-btn'), image: document.getElementById('toggle-image-btn'), audio: document.getElementById('toggle-audio-btn'), video: document.getElementById('toggle-video-btn') };
+    const closeButtons = { businesses: document.getElementById('close-businesses-btn'), image: document.getElementById('close-image-btn'), audio: document.getElementById('close-audio-btn'), video: document.getElementById('close-video-btn') };
     const mainChatArea = document.getElementById('main-chat-area');
     const chatHistory = document.getElementById('chat-history');
     const dashboardContainer = mainChatArea ? mainChatArea.parentElement : null;
 
     // --- State Check ---
-    window.isPanelOpen = function(panelId) { // Make it global for easy debugging from console
-        const panel = panels[panelId];
-        if (!panel) return false;
-        if (panelId === 'businesses') {
-            return !panel.classList.contains('-translate-x-full');
-        } else {
-            return !panel.classList.contains('translate-x-full');
-        }
-    }
+    window.isPanelOpen = function(panelId) { const p = panels[panelId]; return p && ((panelId === 'businesses') ? !p.classList.contains('-translate-x-full') : !p.classList.contains('translate-x-full')); };
 
     // --- Margin Adjustment ---
-    function adjustMainContentMargins() {
-        if (!mainChatArea) return;
-        const isLeftOpen = isPanelOpen('businesses');
-        const isRightOpen = isPanelOpen('image') || isPanelOpen('audio') || isPanelOpen('video'); // <-- Added Video
-        mainChatArea.style.marginLeft = isLeftOpen ? '18rem' : '0px'; // 72 * 0.25rem = 18rem
-        mainChatArea.style.marginRight = isRightOpen ? '24rem' : '0px'; // 96 * 0.25rem = 24rem
-    }
-
+    function adjustMainContentMargins() { if (!mainChatArea) return; const l = isPanelOpen('businesses'); const r = ['image', 'audio', 'video'].some(isPanelOpen); mainChatArea.style.marginLeft = l ? '18rem' : '0px'; mainChatArea.style.marginRight = r ? '24rem' : '0px'; };
 
     // --- Toggle Panel Function ---
-    window.togglePanel = function(panelId, forceOpen) { // Make global for debugging
-        const panel = panels[panelId];
-        if (!panel) return;
-        const currentlyOpen = isPanelOpen(panelId);
-        let shouldBeOpen;
-        if (forceOpen === true) shouldBeOpen = true;
-        else if (forceOpen === false) shouldBeOpen = false;
-        else shouldBeOpen = !currentlyOpen;
-        if (shouldBeOpen === currentlyOpen) return; // No change needed
-
-        // If opening a right-side panel, close other right-side panels
+    window.togglePanel = function(panelId, forceOpen) {
+        const panel = panels[panelId]; if (!panel) return;
+        const current = isPanelOpen(panelId); let shouldOpen = (forceOpen === undefined) ? !current : !!forceOpen; if (shouldOpen === current) return;
         const rightPanelIds = ['image', 'audio', 'video'];
-        if (shouldBeOpen && rightPanelIds.includes(panelId)) {
-            rightPanelIds.forEach(id => {
-                if (id !== panelId && isPanelOpen(id)) {
-                    const otherPanel = panels[id];
-                     if (otherPanel) otherPanel.classList.add('translate-x-full'); // Close other right panels
-                }
-            });
-        }
-
-        // Toggle the specific panel
-        if (panelId === 'businesses') {
-            panel.classList.toggle('-translate-x-full', !shouldBeOpen);
-        } else { // Right-side panels
-            panel.classList.toggle('translate-x-full', !shouldBeOpen);
-             // Adjust z-index so the active right panel is on top
-             const zIndexOpen = '20'; const zIndexClosed = '10';
-             rightPanelIds.forEach(id => {
-                 if (panels[id]) {
-                     panels[id].style.zIndex = (id === panelId && shouldBeOpen) ? zIndexOpen : zIndexClosed;
-                 }
-             });
-        }
-        requestAnimationFrame(adjustMainContentMargins); // Update layout after animation frame
-    }
+        if (shouldOpen && rightPanelIds.includes(panelId)) { rightPanelIds.forEach(id => { if (id !== panelId && isPanelOpen(id)) { const otherPanel = panels[id]; if (otherPanel) otherPanel.classList.add('translate-x-full'); } }); }
+        panel.classList.toggle(panelId === 'businesses' ? '-translate-x-full' : 'translate-x-full', !shouldOpen);
+        if (rightPanelIds.includes(panelId)) { const z = '20', zc = '10'; rightPanelIds.forEach(id => { if (panels[id]) panels[id].style.zIndex = (id === panelId && shouldOpen) ? z : zc; }); }
+        requestAnimationFrame(adjustMainContentMargins);
+    };
 
     // --- Event Listeners ---
-    Object.keys(toggleButtons).forEach(key => {
-        if (toggleButtons[key]) toggleButtons[key].addEventListener('click', (e) => { e.stopPropagation(); togglePanel(key); });
-    });
-    Object.keys(closeButtons).forEach(key => {
-        if (closeButtons[key]) closeButtons[key].addEventListener('click', (e) => { e.stopPropagation(); togglePanel(key, false); });
-    });
+    Object.keys(toggleButtons).forEach(key => { if (toggleButtons[key]) toggleButtons[key].addEventListener('click', (e) => { e.stopPropagation(); togglePanel(key); }); });
+    Object.keys(closeButtons).forEach(key => { if (closeButtons[key]) closeButtons[key].addEventListener('click', (e) => { e.stopPropagation(); togglePanel(key, false); }); });
 
-    // Click outside handler (closes all open panels if clicking outside main content/sidebars)
+    // --- Click Outside Handler ---
     if (dashboardContainer) {
          dashboardContainer.addEventListener('click', (e) => {
-             // Check if the click target is inside any known panel or an interactive element within the main chat area
              const clickedInsideAPanel = Object.values(panels).some(p => p && p.contains(e.target));
              const clickedInsideMainInteractive = mainChatArea && mainChatArea.contains(e.target) && e.target.closest('button, a, input, textarea, select, [role="button"], [onclick]');
-             const clickedOnAnyToggleButton = Object.values(toggleButtons).some(b => b && b.contains(e.target)); // Prevent closing when opening
-
-             if (!clickedInsideAPanel && !clickedInsideMainInteractive && !clickedOnAnyToggleButton) {
-                  // Close all panels if the click was truly outside
-                  Object.keys(panels).forEach(key => {
-                      if (isPanelOpen(key)) togglePanel(key, false);
-                  });
-             }
+             const clickedOnAnyToggleButton = Object.values(toggleButtons).some(b => b && b.contains(e.target));
+             if (!clickedInsideAPanel && !clickedInsideMainInteractive && !clickedOnAnyToggleButton) { Object.keys(panels).forEach(key => { if (isPanelOpen(key)) togglePanel(key, false); }); }
          });
      }
 
-
     // --- Initial Setup ---
-    adjustMainContentMargins(); // Set initial margins correctly
-    if (chatHistory) {
-        // Scroll to bottom on initial load (after slight delay)
-        const initialScroll = () => {
-             if (chatHistory.scrollHeight > chatHistory.clientHeight) {
-                chatHistory.scrollTop = chatHistory.scrollHeight;
-             }
-        };
-        setTimeout(initialScroll, 50);
+    adjustMainContentMargins();
+    if (chatHistory) { const initialScroll = () => { if (chatHistory.scrollHeight > chatHistory.clientHeight) { chatHistory.scrollTop = chatHistory.scrollHeight; } }; setTimeout(initialScroll, 50); const observer = new MutationObserver((mutations) => { let addedNodes = mutations.some(m => m.type === 'childList' && m.addedNodes.length > 0); if(addedNodes) { const isScrolledNearBottom = chatHistory.scrollHeight - chatHistory.clientHeight <= chatHistory.scrollTop + 150; if (isScrolledNearBottom) { scrollToBottom('chat-history'); } } }); observer.observe(chatHistory, { childList: true }); }
+    document.querySelectorAll('textarea').forEach(textarea => { textarea.addEventListener('input', () => autoResizeTextarea(textarea)); textarea.addEventListener('focus', () => autoResizeTextarea(textarea)); textarea.addEventListener('blur', () => autoResizeTextarea(textarea)); autoResizeTextarea(textarea); });
 
-        // Auto-scroll when new messages are added (if already near bottom)
-        const observer = new MutationObserver((mutations) => {
-            let addedNodes = false;
-            for(let mutation of mutations) { if (mutation.type === 'childList' && mutation.addedNodes.length > 0) { addedNodes = true; break; } }
-            if(addedNodes) {
-                 // Check if scrolled near the bottom *before* adding new content potentially changes scrollHeight
-                 const isScrolledNearBottom = chatHistory.scrollHeight - chatHistory.clientHeight <= chatHistory.scrollTop + 150; // Threshold can be adjusted
-                 if (isScrolledNearBottom) {
-                    scrollToBottom('chat-history'); // Smooth scroll for new messages
-                 }
-            }
-        });
-        observer.observe(chatHistory, { childList: true });
-    }
+    // --- Shared Image State Handling (using a SHARED hidden input and form-specific inputs) ---
+    const imageUploadInput = document.getElementById('init_image_upload'); // Input file element
+    const imagePreviewContainer = document.getElementById('init-image-preview-container'); // Container for preview image
+    const imagePreview = document.getElementById('init-image-preview'); // Img element for preview in Image Panel
+    const sharedHiddenImageInput = document.getElementById('shared_init_image_base64'); // *** The SHARED hidden input ***
+    const clearImageButton = document.getElementById('clear-init-image'); // Button to clear image
+    const videoInputPreviewContainer = document.getElementById('video-input-image-preview-container'); // Container for preview image in Video Panel
+    const videoInputPreview = document.getElementById('video-input-image-preview'); // Img element for preview in Video Panel
+    const videoInputPlaceholder = document.getElementById('video-input-image-placeholder'); // Text placeholder for video input image
+    const videoGenerateButton = document.getElementById('video-submit-button'); // Submit button in Video Panel
+    // *** Get hidden inputs INSIDE the FORMS ***
+    const imageFormImageInput = document.getElementById('image_form_init_image_base64'); // Hidden input in Image form
+    const audioFormImageInput = document.getElementById('audio_form_init_image_base64'); // Hidden input in Audio form
+    const videoFormImageInput = document.getElementById('video_form_init_image_base64'); // Hidden input in Video form
+    const textFormImageInput = document.getElementById('text_form_init_image_base64'); // Hidden input in Text form
 
-    // Auto-resize textareas
-    document.querySelectorAll('textarea').forEach(textarea => {
-        textarea.addEventListener('input', () => autoResizeTextarea(textarea));
-        textarea.addEventListener('focus', () => autoResizeTextarea(textarea)); // Optional: resize on focus too
-        textarea.addEventListener('blur', () => autoResizeTextarea(textarea)); // Optional: resize on blur
-        autoResizeTextarea(textarea); // Initial resize on load
-    });
+    // Function to update the shared hidden input AND all form-specific hidden inputs
+    function updateSharedImageState(base64) {
+        const safeBase64 = base64 || ''; // Treat null/undefined as empty string
+        if (sharedHiddenImageInput) sharedHiddenImageInput.value = safeBase64;
+        if (imageFormImageInput) imageFormImageInput.value = safeBase64;
+        if (audioFormImageInput) audioFormImageInput.value = safeBase64;
+        if (videoFormImageInput) videoFormImageInput.value = safeBase64;
+        if (textFormImageInput) textFormImageInput.value = safeBase64;
 
-    // --- Image Input Handling (SHARED STATE) ---
-    const imageUploadInput = document.getElementById('init_image_upload'); // In Image Panel
-    const imagePreviewContainer = document.getElementById('init-image-preview-container'); // In Image Panel
-    const imagePreview = document.getElementById('init-image-preview'); // In Image Panel
-    const hiddenImageInput = document.getElementById('init_image_base64'); // Shared hidden input
-    const clearImageButton = document.getElementById('clear-init-image'); // In Image Panel
-    const videoInputPreviewContainer = document.getElementById('video-input-image-preview-container'); // In Video Panel
-    const videoInputPreview = document.getElementById('video-input-image-preview'); // In Video Panel
-    const videoInputPlaceholder = document.getElementById('video-input-image-placeholder'); // In Video Panel
-    const videoGenerateButton = document.getElementById('generate-video-button'); // In Video Panel
+        // Update UI based on whether an image is present
+        const hasImage = !!safeBase64;
+        const dataUrl = hasImage ? `data:image/png;base64,${safeBase64}` : '#';
 
-    // Function to clear shared image state and update UI in BOTH panels
-    function clearImageSelection() {
-        console.log("Clearing shared image selection");
-        if (imageUploadInput) imageUploadInput.value = null; // Clear file input value
-        if (hiddenImageInput) hiddenImageInput.value = '';
-        // Update Image Panel Preview
-        if (imagePreview) { imagePreview.src = '#'; imagePreview.classList.add('hidden'); }
-        if (imagePreviewContainer) imagePreviewContainer.classList.add('hidden');
-        // Update Video Panel Preview
-        if (videoInputPreview) { videoInputPreview.src = '#'; }
-        if (videoInputPreviewContainer) videoInputPreviewContainer.classList.add('hidden');
-        if (videoInputPlaceholder) videoInputPlaceholder.classList.remove('hidden');
-        // Disable Video Button
+        if (imagePreview) { imagePreview.src = dataUrl; imagePreview.classList.toggle('hidden', !hasImage); }
+        if (imagePreviewContainer) imagePreviewContainer.classList.toggle('hidden', !hasImage);
+
+        if (videoInputPreview) { videoInputPreview.src = dataUrl; videoInputPreview.classList.toggle('hidden', !hasImage); }
+        if (videoInputPreviewContainer) videoInputPreviewContainer.classList.toggle('hidden', !hasImage);
+        if (videoInputPlaceholder) videoInputPlaceholder.classList.toggle('hidden', hasImage);
+
         if (videoGenerateButton) {
-            videoGenerateButton.disabled = true;
-            videoGenerateButton.classList.add('bg-gray-400', 'cursor-not-allowed');
-            videoGenerateButton.classList.remove('bg-blue-600', 'hover:bg-blue-700');
-            videoGenerateButton.title = "Input image required.";
+            // Button is enabled ONLY if there is an image
+            const canGenerateVideo = hasImage;
+
+            videoGenerateButton.disabled = !canGenerateVideo;
+            videoGenerateButton.classList.toggle('bg-gray-400', !canGenerateVideo);
+            videoGenerateButton.classList.toggle('cursor-not-allowed', !canGenerateVideo);
+            videoGenerateButton.classList.toggle('bg-blue-600', canGenerateVideo);
+            videoGenerateButton.classList.toggle('hover:bg-blue-700', canGenerateVideo);
+
+            // Update the title based only on image presence
+            if (!hasImage) {
+                 videoGenerateButton.title = "Input image required.";
+            } else {
+                videoGenerateButton.title = "Generate Video"; // No chat requirement
+            }
         }
     }
 
-    // Attach file input listener (in image panel)
-    if (imageUploadInput && hiddenImageInput && imagePreview && videoInputPreview && videoInputPreviewContainer && videoInputPlaceholder && videoGenerateButton) {
+
+    // --- Image Input Handling ---
+    if (imageUploadInput && sharedHiddenImageInput) { // Check for essential elements
         imageUploadInput.addEventListener('change', function(event) {
             const file = event.target.files[0];
             if (file && file.type.startsWith('image/')) {
@@ -733,49 +662,104 @@
                     const dataUrl = e.target.result;
                     const base64String = dataUrl.split(',')[1]; // Get Base64 part
                     if (base64String) {
-                        hiddenImageInput.value = base64String; // Update SHARED hidden input
-                        // Update Image Panel Preview
-                        imagePreview.src = dataUrl;
-                        imagePreview.classList.remove('hidden');
-                        imagePreviewContainer.classList.remove('hidden');
-                        // Update Video Panel Preview
-                        videoInputPreview.src = dataUrl;
-                        videoInputPreviewContainer.classList.remove('hidden');
-                        if(videoInputPlaceholder) videoInputPlaceholder.classList.add('hidden');
-                        // Enable Video Button
-                        if(videoGenerateButton){
-                             videoGenerateButton.disabled = false;
-                             videoGenerateButton.classList.remove('bg-gray-400', 'cursor-not-allowed');
-                             videoGenerateButton.classList.add('bg-blue-600', 'hover:bg-blue-700');
-                             videoGenerateButton.title = "Generate Video";
-                        }
+                        updateSharedImageState(base64String); // Update all inputs
                     } else {
                         console.error("Failed base64 extraction.");
-                        clearImageSelection();
+                        clearImageSelection(); // Clear everything if extraction fails
                     }
                 }
-                reader.onerror = function(err) {
-                    console.error("File read error:", err);
-                    clearImageSelection();
-                }
-                reader.readAsDataURL(file);
+                reader.onerror = function(err) { console.error("File read error:", err); clearImageSelection(); }
+                reader.readAsDataURL(file); // Read file as Data URL (Base64)
             } else {
-                if(file) alert("Invalid file type. Please upload PNG, JPEG, or WEBP.");
-                clearImageSelection(); // Clear selection if invalid file or no file selected
+                // Handle case where file is invalid or no file is selected after opening dialog
+                if(imageUploadInput.value) alert("Invalid file type. Please upload PNG, JPEG, or WEBP.");
+                clearImageSelection();
             }
         });
-    } else {
-        console.warn("One or more image/video handling elements not found.");
-    }
+    } else { console.warn("Image upload or shared state input element not found."); }
 
-    // Attach clear button listener (in image panel)
+    // --- Clear Image Listener ---
     if (clearImageButton) {
         clearImageButton.addEventListener('click', (e) => {
-             e.stopPropagation(); // Prevent click-outside closing panel
+             e.stopPropagation();
              clearImageSelection();
+             if (imageUploadInput) imageUploadInput.value = ''; // Explicitly clear the file input element
         });
     }
-    // --- End Image Input Handling ---
+
+    // --- Initial Image State Check on Load ---
+    // Check if there is an image already loaded from the server (via Flask template context)
+    const initialBase64 = sharedHiddenImageInput?.value;
+    if (initialBase64) {
+        console.log("DEBUG: Initial image state found on page load.");
+        // If there's an initial image, populate all the form hidden inputs and update UI
+        updateSharedImageState(initialBase64);
+    } else {
+         console.log("DEBUG: No initial image state on page load.");
+         // Ensure UI is correctly showing no image state
+         clearImageSelection(); // Will set inputs to empty and hide previews/disable button
+    }
+    // --- End Shared Image State Handling ---
+
+
+    // **** Form Submission Loading Logic ****
+    // Attach submit listeners to forms to show indicators
+    const textForm = document.getElementById('text-prompt-form');
+    const textSubmitButton = document.getElementById('text-submit-button');
+    const textLoadingIndicator = document.getElementById('text-loading-indicator');
+
+    const imageForm = document.getElementById('image-gen-form');
+    const imageSubmitButton = document.getElementById('image-submit-button');
+    const imageLoadingIndicator = document.getElementById('image-loading-indicator');
+
+    const audioForm = document.getElementById('audio-gen-form');
+    const audioSubmitButton = document.getElementById('audio-submit-button');
+    const audioLoadingIndicator = document.getElementById('audio-loading-indicator');
+
+    const videoForm = document.getElementById('video-gen-form');
+    const videoSubmitButton = document.getElementById('video-submit-button'); // Changed ID from generate-video-button
+    const videoLoadingIndicator = document.getElementById('video-loading-indicator');
+
+    // --- Universal Form Submit Handler ---
+    function handleFormSubmission(event, submitButton, loadingIndicator) {
+        // Only proceed if the button is NOT already disabled
+        if (submitButton && !submitButton.disabled) {
+            // Add temporary state update *before* Flask redirects
+            if (submitButton) {
+                submitButton.disabled = true;
+                // Optionally change button appearance or text here
+                // submitButton.textContent = 'Processing...'; // Example text change
+            }
+            if (loadingIndicator) {
+                loadingIndicator.classList.remove('hidden'); // Show the spinner
+            }
+            
+        } else if (submitButton && submitButton.disabled) {
+             // Prevent default submission if the button is already disabled
+             event.preventDefault();
+        }
+        // Otherwise, allow the default form submission which triggers the redirect
+    }
+
+    // --- Attach Handlers ---
+    if(textForm && textSubmitButton && textLoadingIndicator) {
+        textForm.addEventListener('submit', (e) => handleFormSubmission(e, textSubmitButton, textLoadingIndicator));
+    }
+    if(imageForm && imageSubmitButton && imageLoadingIndicator) {
+        imageForm.addEventListener('submit', (e) => handleFormSubmission(e, imageSubmitButton, imageLoadingIndicator));
+    }
+    if(audioForm && audioSubmitButton && audioLoadingIndicator) {
+        audioForm.addEventListener('submit', (e) => handleFormSubmission(e, audioSubmitButton, audioLoadingIndicator));
+    }
+     // Changed to video-submit-button in HTML, update reference
+    const actualVideoSubmitButton = document.getElementById('video-submit-button');
+    if(videoForm && actualVideoSubmitButton && videoLoadingIndicator) {
+        videoForm.addEventListener('submit', (e) => handleFormSubmission(e, actualVideoSubmitButton, videoLoadingIndicator));
+    }
+
+    // CSS for the spinner (add this to your base.html's <head> or a CSS file)
+    
+
 
  });
 </script>

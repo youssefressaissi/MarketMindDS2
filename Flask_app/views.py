@@ -5,18 +5,18 @@ import requests
 import json
 import base64 # For encoding/decoding data
 import uuid # For generating unique filenames for image uploads
+import traceback # For more detailed error logging
 from flask import (Blueprint, render_template, request, flash,
                    redirect, url_for, current_app, session, jsonify)
 from flask_login import login_required, current_user
 from bson.objectid import ObjectId
 from datetime import datetime
-# Assuming mongo is initialized correctly in __init__.py
-from . import mongo
+from . import mongo # Assuming mongo = PyMongo() initialized in __init__
 
 views = Blueprint('views', __name__)
 
 # --- Constants ---
-MAX_HISTORY_MESSAGES = 1000 # Increased limit, consider pagination for very long chats
+MAX_HISTORY_MESSAGES = 10
 CONVERSATION_TITLE_LENGTH = 40
 SUPPORTED_LANGUAGES = {
     "en": "English", "es": "Spanish", "fr": "French", "de": "German", "it": "Italian",
@@ -24,9 +24,10 @@ SUPPORTED_LANGUAGES = {
     "cs": "Czech", "ar": "Arabic", "zh-cn": "Chinese (Mandarin, simplified)", "hu": "Hungarian",
     "ko": "Korean", "ja": "Japanese"
 }
-# --- Path to your SVD workflow JSON file ---
-# Assumes workflow_templates is a sibling folder to your flask_app directory
-# or adjust path as needed relative to where Flask runs from.
+# --- Path to SVD workflow template ---
+# Use os.path.join for better cross-platform compatibility
+# Assumes 'workflow_templates' is a folder at the same level as your flask_app directory
+# Adjust if your structure is different
 SVD_WORKFLOW_FILE = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', 'workflow_templates', 'workflow_animated.json'))
 
 
@@ -48,58 +49,65 @@ Do not include conversational text, explanations, or apologies in your output. O
 
 # --- Helper Function to get Config ---
 def get_config_or_raise(config_key, default=None):
-    """Gets a config value from Environment variables or raises ValueError if missing (unless default is provided)."""
     value = os.environ.get(config_key)
     if not value:
-        if default is not None:
-            print(f"WARN: Environment variable '{config_key}' not set, using default value: '{default}'")
-            return default
-        error_msg = f"Configuration Error: Required environment variable '{config_key}' is missing or empty."
+        if default is not None: return default
+        error_msg = f"Config Error: Required env var '{config_key}' missing."
         print(f"!!! {error_msg} !!!")
+        # In a real app, you might want to raise a more specific exception
+        # or handle this more gracefully depending on the context.
+        # For now, raising ValueError to make it obvious during development.
         raise ValueError(error_msg)
     return value
 
 # --- Helper Function to Fetch Speakers ---
 def get_available_speakers(xtts_api_url_base):
-    """Fetches available speaker IDs/filenames from the XTTS service."""
     available_speakers = []
     if not xtts_api_url_base:
         print("WARN: XTTS_API_URL not configured, cannot fetch speakers.")
         return []
     try:
-        # Assume common endpoint, verify with your specific XTTS API server docs
         speakers_endpoint = f"{xtts_api_url_base}/speakers_list"
         print(f"DEBUG: Fetching speakers from {speakers_endpoint}")
-        response = requests.get(speakers_endpoint, timeout=15)
-        response.raise_for_status()
+        # Set a reasonable timeout
+        response = requests.get(speakers_endpoint, timeout=15) # Increased timeout slightly
+        response.raise_for_status() # Raise HTTPError for bad responses (4xx or 5xx)
 
         speaker_data = response.json()
-        # Handle various possible response structures
+        # Handle different potential response formats gracefully
         if isinstance(speaker_data, list):
             cleaned_speakers = [str(s).replace('.wav', '') for s in speaker_data if isinstance(s, str)]
             available_speakers.extend(cleaned_speakers)
         elif isinstance(speaker_data, dict):
-            if "speakers" in speaker_data and isinstance(speaker_data["speakers"], list):
-                cleaned_speakers = [str(s).replace('.wav', '') for s in speaker_data["speakers"] if isinstance(s, str)]
-                available_speakers.extend(cleaned_speakers)
-            else:
-                 available_speakers.extend([k for k in speaker_data.keys() if isinstance(k, str)])
-
-        available_speakers = sorted([s for s in available_speakers if s])
+             # Common case: {"speakers": ["speaker1.wav", ...]}
+             if "speakers" in speaker_data and isinstance(speaker_data["speakers"], list):
+                 cleaned_speakers = [str(s).replace('.wav', '') for s in speaker_data["speakers"] if isinstance(s, str)]
+                 available_speakers.extend(cleaned_speakers)
+             # Another possible case: {"speaker1": {...}, "speaker2": {...}}
+             else:
+                  available_speakers.extend([k for k in speaker_data.keys() if isinstance(k, str)])
+        # Filter out any empty strings that might have resulted
+        available_speakers = sorted([s for s in available_speakers if s]) # Sort for consistency
         if not available_speakers:
-            print(f"WARN: No speakers returned by XTTS or response format unexpected. Response: {speaker_data}")
+            print("WARN: No speakers returned by XTTS or response format unexpected.")
+            print(f"DEBUG: XTTS speakers_list response: {speaker_data}")
         else:
             print(f"DEBUG: Found speakers: {available_speakers}")
 
-    except requests.exceptions.Timeout: print(f"WARN: Timeout fetching speakers from {speakers_endpoint}.")
-    except requests.exceptions.RequestException as e: print(f"WARN: Error fetching speakers: {e}. URL: {speakers_endpoint}")
-    except Exception as e: print(f"WARN: Unexpected error fetching/parsing speakers: {type(e).__name__} - {e}.")
+    except requests.exceptions.Timeout:
+        print(f"WARN: Timeout fetching speakers from {speakers_endpoint}.")
+    except requests.exceptions.RequestException as e:
+        print(f"WARN: Error fetching speakers: {e}. URL: {speakers_endpoint}")
+    except Exception as e:
+        # Catch other potential errors like JSONDecodeError
+        print(f"WARN: Unexpected error fetching speakers: {type(e).__name__} - {e}.")
     return available_speakers
+
 
 # --- === ComfyUI SVD Payload Function === ---
 def create_svd_payload_from_api_json(init_image_base64):
     """
-    Creates the ComfyUI API payload using the SVD workflow template,
+    Creates the ComfyUI API payload using the workflow template,
     uploads the initial image, and injects the filename.
     """
     print(f"INFO: Creating SVD payload. Image Provided: {'Yes' if init_image_base64 else 'No'}")
@@ -108,21 +116,21 @@ def create_svd_payload_from_api_json(init_image_base64):
         return None
 
     try:
-        # --- Load the specific workflow JSON ---
-        print(f"Attempting to load workflow from: {SVD_WORKFLOW_FILE}")
+        print(f"Attempting to load workflow from calculated path: {SVD_WORKFLOW_FILE}")
         if not os.path.exists(SVD_WORKFLOW_FILE):
-            raise FileNotFoundError(f"SVD Workflow file not found at specified path: {SVD_WORKFLOW_FILE}")
+            raise FileNotFoundError(f"Workflow file not found at calculated path: {SVD_WORKFLOW_FILE}")
+
         with open(SVD_WORKFLOW_FILE, "r") as f:
             workflow = json.load(f)
         print("Workflow JSON loaded successfully.")
 
-        # --- Define Node IDs (MUST MATCH YOUR workflow_animated.json) ---
-        load_image_node_id = "16" # The 'LoadImage' node
-        save_node_id = "17"       # The 'VHS_VideoCombine' node (or equivalent save node)
+        # --- Node IDs from YOUR workflow_animated.json ---
+        load_image_node_id = "16" # Ensure this ID matches your LoadImage node
+        save_node_id = "17"       # Ensure this ID matches your VHS_VideoCombine node
         # ---
 
         # 1. Upload Initial Image to ComfyUI
-        video_api_url_base = get_config_or_raise('VIDEO_API_URL') # e.g., http://comfy:8188
+        video_api_url_base = get_config_or_raise('VIDEO_API_URL')
         upload_url = f"{video_api_url_base}/upload/image"
         try:
             image_bytes = base64.b64decode(init_image_base64)
@@ -146,90 +154,105 @@ def create_svd_payload_from_api_json(init_image_base64):
         # 2. Inject uploaded filename into the LoadImage node
         if load_image_node_id in workflow:
             if workflow[load_image_node_id].get("class_type") != "LoadImage":
-                 print(f"WARN: Node {load_image_node_id} might not be a LoadImage node.")
+                 print(f"WARN: Node {load_image_node_id} might not be a LoadImage node (class_type: {workflow[load_image_node_id].get('class_type')}).")
             if "inputs" in workflow[load_image_node_id] and "image" in workflow[load_image_node_id]["inputs"]:
                 workflow[load_image_node_id]["inputs"]["image"] = uploaded_filename
                 print(f"Injected filename '{uploaded_filename}' into LoadImage node {load_image_node_id}")
             else:
-                print(f"ERROR: Cannot find 'inputs' or 'image' key in LoadImage node {load_image_node_id} in workflow JSON.")
+                print(f"ERROR: 'inputs' or 'image' key not found on LoadImage node {load_image_node_id}.")
                 return None
         else:
-            print(f"ERROR: Load Image node ID '{load_image_node_id}' not found in workflow JSON!")
+            print(f"ERROR: Load Image node ID '{load_image_node_id}' not found in workflow!")
             return None
 
-        # 3. Set filename prefix on the save node (for organization)
+        # 3. Set filename prefix on the save node
         if save_node_id in workflow:
             if workflow[save_node_id].get("class_type") != "VHS_VideoCombine":
-                 print(f"WARN: Node {save_node_id} might not be the expected VHS_VideoCombine node.")
+                 print(f"WARN: Node {save_node_id} might not be a VHS_VideoCombine node (class_type: {workflow[save_node_id].get('class_type')}).")
             if "inputs" in workflow[save_node_id] and "filename_prefix" in workflow[save_node_id]["inputs"]:
                 workflow[save_node_id]["inputs"]["filename_prefix"] = "marketmind_SVD_output"
                 print(f"Set filename_prefix on save node {save_node_id}")
             else:
-                print(f"WARN: Cannot find 'inputs' or 'filename_prefix' key on save node {save_node_id}.")
+                print(f"WARN: 'inputs' or 'filename_prefix' key not found on save node {save_node_id}.")
         else:
-            print(f"WARN: Save node ID '{save_node_id}' not found in workflow JSON.")
+            print(f"WARN: Save node ID '{save_node_id}' not found.")
 
-        # The specific SVD workflow likely uses motion prompts implicitly or via other nodes,
-        # so we don't explicitly inject the text `video_prompt` here based on workflow_animated.json structure.
-
-        return {"prompt": workflow} # Return structure ComfyUI /prompt endpoint expects
+        return {"prompt": workflow}
 
     except FileNotFoundError as e: print(f"ERROR: Workflow file missing: {e}"); return None
-    except json.JSONDecodeError as e: print(f"ERROR: Failed to parse workflow JSON! Check file: {e}"); return None
+    except json.JSONDecodeError as e: print(f"ERROR: Failed to parse workflow JSON! Check {SVD_WORKFLOW_FILE}: {e}"); return None
     except KeyError as e: print(f"ERROR: Key error accessing workflow structure: {e}"); return None
     except requests.exceptions.RequestException as e: print(f"ERROR: Failed to upload image to ComfyUI: {e}"); return None
-    except ValueError as e: print(f"ERROR: Config or value error creating SVD payload: {e}"); return None
-    except Exception as e: print(f"ERROR: Unexpected error in create_svd_payload: {type(e).__name__} - {e}"); return None
-# --- End ComfyUI function ---
+    except ValueError as e: print(f"ERROR: Value error creating SVD payload: {e}"); return None
+    except Exception as e: print(f"ERROR: Unexpected error in create_svd_payload: {type(e).__name__} - {e}\n{traceback.format_exc()}"); return None
 
-
-# --- Route Utility: Prepare common context for dashboard template ---
+# --- Route Utility: Prepare common context ---
 def prepare_template_context(user_id_obj, request_data, active_conversation_id_str=None):
-    """Fetches conversations, speakers, and merges request data for template rendering."""
-    context = {k: v for k, v in request_data.items()} # Start with request args/form data
+    context = {k: v for k, v in request_data.items()}
     context['user'] = current_user
+    context.setdefault('last_topic', '')
+    context.setdefault('ollama_error', None)
+    context.setdefault('image_error', None)
+    context.setdefault('last_image_prompt', '')
+    context.setdefault('last_refined_prompt', '')
+    context.setdefault('generated_image_base64', None)
+    # --- Ensure last_init_image_base64 is handled correctly ---
+    # Get it from request_data if present, otherwise default to empty string (or None)
+    context['last_init_image_base64'] = request_data.get('last_init_image_base64', None)
+    if context['last_init_image_base64'] == '': context['last_init_image_base64'] = None # Treat empty string as None
+    # ---
+    context.setdefault('audio_error', None)
+    context.setdefault('last_audio_text', '')
+    context.setdefault('last_language_code', 'en')
+    context.setdefault('last_speaker_id', None)
+    context.setdefault('generated_audio_base64', None)
+    context.setdefault('video_error', None)
+    context.setdefault('last_video_prompt', '')
+    context.setdefault('video_status_message', None)
+    context['supported_languages'] = SUPPORTED_LANGUAGES
+    context['available_speakers'] = []
+    context['all_conversations'] = []
+    context['chat_history'] = []
+    context['active_conversation_id'] = None
 
-    # Set defaults for ALL variables the template might access
-    defaults = {
-        'last_topic': '', 'ollama_error': None, 'image_error': None,
-        'last_image_prompt': '', 'last_refined_prompt': '',
-        'generated_image_base64': None, 'last_init_image_base64': None,
-        'audio_error': None, 'last_audio_text': '', 'last_language_code': 'en',
-        'last_speaker_id': None, 'generated_audio_base64': None,
-        'video_error': None, 'last_video_prompt': '', 'video_status_message': None,
-        'all_conversations': [], 'chat_history': [], 'active_conversation_id': None,
-        'supported_languages': SUPPORTED_LANGUAGES, 'available_speakers': []
-    }
-    for key, default_value in defaults.items():
-        context.setdefault(key, default_value)
-
-    try: # Fetch DB data
-        if mongo.db is None: raise ConnectionError("Database connection unavailable.")
-        context['all_conversations'] = list(mongo.db.conversations.find({"user_id": user_id_obj}).sort("last_updated", -1))
-        valid_active_id = None
-        if active_conversation_id_str and ObjectId.is_valid(active_conversation_id_str):
-            active_convo = mongo.db.conversations.find_one({"_id": ObjectId(active_conversation_id_str), "user_id": user_id_obj})
-            if active_convo:
-                valid_active_id = active_conversation_id_str
-                context['chat_history'] = active_convo.get("messages", [])
-            else:
-                if 'conversation_id' in request_data: flash("Selected conversation not found.", category='warning')
-        context['active_conversation_id'] = valid_active_id
+    try:
+        if mongo.db is not None:
+            context['all_conversations'] = list(mongo.db.conversations.find({"user_id": user_id_obj}).sort("last_updated", -1))
+            valid_active_id = None
+            if active_conversation_id_str and ObjectId.is_valid(active_conversation_id_str):
+                active_convo = mongo.db.conversations.find_one({"_id": ObjectId(active_conversation_id_str), "user_id": user_id_obj})
+                if active_convo:
+                    valid_active_id = active_conversation_id_str
+                    context['chat_history'] = active_convo.get("messages", [])
+                else:
+                    if 'conversation_id' in request_data: flash("Selected conversation not found.", category='warning')
+                    print(f"WARN: Conversation ID {active_conversation_id_str} not found for user {user_id_obj}.")
+            context['active_conversation_id'] = valid_active_id
+        else:
+             print("ERROR: MongoDB connection (mongo.db) is None in prepare_template_context.")
+             flash("Database connection error.", category='error')
     except Exception as e:
-        print(f"ERROR: DB error fetching context: {e}"); flash("Error loading conversation data.", category='error')
-        context['all_conversations'], context['chat_history'], context['active_conversation_id'] = [], [], None
+        print(f"ERROR: Database error fetching conversation data: {e}")
+        flash("Error loading conversation data.", category='error')
+        context['all_conversations'] = []; context['chat_history'] = []; context['active_conversation_id'] = None
 
-    try: # Fetch speakers
-        xtts_api_url_base = os.environ.get('XTTS_API_URL') # Use get with default None
+    try:
+        xtts_api_url_base = os.environ.get('XTTS_API_URL')
         if xtts_api_url_base:
             context['available_speakers'] = get_available_speakers(xtts_api_url_base)
-            # Ensure last_speaker_id is valid or default to first available
-            current_speaker = context.get('last_speaker_id')
-            if not current_speaker or current_speaker not in context['available_speakers']:
-                 context['last_speaker_id'] = context['available_speakers'][0] if context['available_speakers'] else None
-        else: print("WARN: XTTS_API_URL not set.")
-    except Exception as e: print(f"WARN: Could not get speakers for context: {e}"); context['available_speakers'] = []
+            # --- Fix: Ensure last_speaker_id from request_data is prioritized ---
+            requested_speaker = request_data.get('last_speaker_id')
+            if requested_speaker and requested_speaker in context['available_speakers']:
+                 context['last_speaker_id'] = requested_speaker
+            elif not context.get('last_speaker_id') and context.get('available_speakers'): # Set default only if no speaker was passed in request_data
+                 context['last_speaker_id'] = context['available_speakers'][0]
+            # If requested speaker is invalid and no default was set, it remains None (or previous value)
+        else: print("WARN: XTTS_API_URL environment variable not set. Cannot load speakers.")
+    except Exception as e:
+        print(f"WARN: Could not get speakers during context preparation: {e}")
+        context['available_speakers'] = []
 
+    print(f"DEBUG [prepare_template_context]: active_id={context.get('active_conversation_id')}, last_image_b64_present={bool(context.get('last_init_image_base64'))}, video_status='{context.get('video_status_message')}'")
     return context
 
 # --- Home Route ---
@@ -243,21 +266,18 @@ def home():
 def dashboard():
     user_id_obj = ObjectId(current_user.id)
     template_context = prepare_template_context(user_id_obj, request.args, request.args.get('conversation_id'))
-    print(f"DEBUG: Rendering dashboard. Active Convo ID: {template_context.get('active_conversation_id')}. Video Status: '{template_context.get('video_status_message')}'")
+    print(f"DEBUG [dashboard route]: Rendering with context. last_init_image_base64_present={bool(template_context.get('last_init_image_base64'))}, video_status='{template_context.get('video_status_message')}'")
     return render_template("dashboard.html", **template_context)
 
 # --- Ollama Text Generation Route ---
 @views.route('/generate_text_prompt', methods=['POST'])
 @login_required
 def generate_text_prompt():
-    print("\n--- Handling POST to /generate_text_prompt ---")
     user_id_obj = ObjectId(current_user.id)
     conversation_id_str = request.form.get('conversation_id')
     user_input_topic = request.form.get('topic', '').strip()
-
-    # Preserve ALL state from the form for the redirect
     redirect_state = {k: v for k, v in request.form.items()}
-    redirect_state['last_topic'] = user_input_topic # Ensure current topic is preserved
+    redirect_state['last_topic'] = user_input_topic
 
     if not user_input_topic:
         flash("Please enter a topic or message.", category='error')
@@ -269,44 +289,62 @@ def generate_text_prompt():
         ollama_endpoint = get_config_or_raise('OLLAMA_ENDPOINT')
         ollama_model = get_config_or_raise('OLLAMA_MODEL')
 
-        # --- Find or Create Conversation ---
         conversation_object_id, history = None, []
         if conversation_id_str and ObjectId.is_valid(conversation_id_str):
             conv = mongo.db.conversations.find_one({"_id": ObjectId(conversation_id_str), "user_id": user_id_obj})
-            if conv: conversation_object_id = conv['_id']; history = conv.get("messages", [])
-            else: flash("Conversation not found, starting new.", category='warning'); conversation_id_str = None; redirect_state['conversation_id'] = ''
-        if not conversation_object_id:
-            title = user_input_topic[:CONVERSATION_TITLE_LENGTH] + ('...' if len(user_input_topic)>CONVERSATION_TITLE_LENGTH else '')
-            res = mongo.db.conversations.insert_one({"user_id": user_id_obj, "title": title, "created_at": datetime.utcnow(), "last_updated": datetime.utcnow(), "messages": []})
-            conversation_object_id = res.inserted_id; conversation_id_str = str(conversation_object_id); history = []
-            redirect_state['conversation_id'] = conversation_id_str # Update state
-        # --- End Find/Create ---
+            if conv:
+                conversation_object_id = conv['_id']; history = conv.get("messages", [])
+                print(f"DEBUG: Found existing conversation: {conversation_object_id}")
+            else:
+                flash("Conversation not found. Starting a new chat.", category='warning')
+                conversation_id_str = None
+                redirect_state['conversation_id'] = ''
+        else:
+             print("DEBUG: No valid conversation ID provided, creating new.")
+             conversation_id_str = None
 
-        # Prepare messages for Ollama
+        if not conversation_object_id:
+            title = user_input_topic[:CONVERSATION_TITLE_LENGTH] + ('...' if len(user_input_topic) > CONVERSATION_TITLE_LENGTH else '')
+            new_convo_doc = {"user_id": user_id_obj, "title": title, "created_at": datetime.utcnow(), "last_updated": datetime.utcnow(), "messages": []}
+            insert_result = mongo.db.conversations.insert_one(new_convo_doc)
+            conversation_object_id = insert_result.inserted_id
+            conversation_id_str = str(conversation_object_id)
+            history = []
+            redirect_state['conversation_id'] = conversation_id_str
+            print(f"DEBUG: Created new conversation: {conversation_object_id}")
+
         messages = [{"role": "system", "content": MARKETING_SYSTEM_PROMPT.strip()}]
-        if history: messages.extend([{"role": m['role'], "content": m['content']} for m in history[-MAX_HISTORY_MESSAGES:] if m.get('role') and m.get('content')])
+        if history:
+            valid_history = [{"role": m['role'], "content": m['content']} for m in history[-MAX_HISTORY_MESSAGES:] if m.get('role') and m.get('content')]
+            messages.extend(valid_history)
         messages.append({"role": "user", "content": user_input_topic})
+
         payload = {"model": ollama_model, "messages": messages, "stream": False}
         ollama_api_url = f"{ollama_endpoint}/api/chat"
-
-        # Call Ollama
-        print(f"*** CALLING OLLAMA (TEXT) *** -> URL: {ollama_api_url}")
+        print(f"DEBUG: Calling Ollama: {ollama_api_url} with model {ollama_model}")
         response = requests.post(ollama_api_url, json=payload, timeout=90); response.raise_for_status()
-        data = response.json(); latest_ai_response = data.get('message', {}).get('content', '').strip()
-        if not latest_ai_response: flash("AI response empty.", category='warning')
+        data = response.json(); print(f"DEBUG: Ollama response: {data}")
+        latest_ai_response = data.get('message', {}).get('content', '').strip()
+        if not latest_ai_response: flash("AI did not provide a response.", category='warning'); print("WARN: Ollama response content was empty.")
 
-        # Save to DB
-        msgs = [{"role": "user", "content": user_input_topic, "timestamp": datetime.utcnow()}]
-        if latest_ai_response: msgs.append({"role": "assistant", "content": latest_ai_response, "timestamp": datetime.utcnow()})
-        mongo.db.conversations.update_one({"_id": conversation_object_id}, {"$push": {"messages": {"$each": msgs}}, "$set": {"last_updated": datetime.utcnow()}})
+        user_message_doc = {"role": "user", "content": user_input_topic, "timestamp": datetime.utcnow()}
+        messages_to_save = [user_message_doc]
+        if latest_ai_response: messages_to_save.append({"role": "assistant", "content": latest_ai_response, "timestamp": datetime.utcnow()})
 
-    except Exception as e:
-        print(f"ERROR text gen: {type(e).__name__} - {e}"); flash(f"Error generating text: {e}", category='error')
+        mongo.db.conversations.update_one({"_id": conversation_object_id}, {"$push": {"messages": {"$each": messages_to_save}}, "$set": {"last_updated": datetime.utcnow()}})
+        print(f"DEBUG: Saved messages to conversation {conversation_object_id}")
 
-    # Clear generated media from other panels before redirect
+    except requests.exceptions.Timeout: print(f"ERROR: Timeout calling Ollama API at {ollama_api_url}"); flash("Error: The request to the AI text service timed out.", category='error')
+    except requests.exceptions.RequestException as e: print(f"ERROR: RequestException calling Ollama API: {e}. URL: {ollama_api_url}"); flash(f"Error connecting to AI text service: {e}", category='error')
+    except ValueError as e: print(f"ERROR: Configuration error: {e}"); flash(str(e), category='error')
+    except ConnectionError as e: print(f"ERROR: Database connection error: {e}"); flash(str(e), category='error')
+    except Exception as e: print(f"ERROR: Unexpected error during text generation: {type(e).__name__} - {e}\n{traceback.format_exc()}"); flash(f"An unexpected error occurred: {e}", category='error')
+
+    # Clear other panel results before redirect
     redirect_state.pop('generated_image_base64', None); redirect_state.pop('image_error', None)
     redirect_state.pop('generated_audio_base64', None); redirect_state.pop('audio_error', None)
     redirect_state.pop('video_status_message', None)
+    # Keep last_init_image_base64 in redirect_state
 
     return redirect(url_for('views.dashboard', **redirect_state))
 
@@ -314,268 +352,200 @@ def generate_text_prompt():
 @views.route('/generate-image', methods=['POST'])
 @login_required
 def generate_image():
-    print("\n--- Handling POST to /generate-image ---")
     user_id_obj = ObjectId(current_user.id)
-    # Get data from form
     user_input_prompt = request.form.get('image_prompt', '').strip()
-    # Use the shared hidden input for the initial image
-    init_image_b64 = request.form.get('init_image_base64')
+    # Get image from the SHARED hidden input name
+    init_image_b64 = request.form.get('last_init_image_base64')
     if not init_image_b64 or init_image_b64 == 'undefined': init_image_b64 = None
     conversation_id_str = request.form.get('conversation_id')
 
-    # Prepare context for rendering, starting with form data
+    # Start with submitted form data
     template_context = {k: v for k, v in request.form.items()}
+    # Explicitly set values related to this action
     template_context['last_image_prompt'] = user_input_prompt
-    template_context['last_init_image_base64'] = init_image_b64 # Reflect input used
+    template_context['last_init_image_base64'] = init_image_b64
 
-    # Initialize results
     generated_image_b64_result = None
     image_gen_error_message = None
     refined_prompt = ""
-    ollama_api_url = None
-    image_api_url_base = None
-    endpoint = None
 
     try:
-        # --- Validation & Augment Context ---
-        if not conversation_id_str: raise ValueError("No active conversation selected.")
+        if not conversation_id_str or not ObjectId.is_valid(conversation_id_str): raise ValueError("Cannot generate image without an active conversation.")
         if not user_input_prompt: raise ValueError("Image prompt cannot be empty.")
-        full_context = prepare_template_context(user_id_obj, template_context, conversation_id_str)
-        template_context.update(full_context) # Add speakers, history etc.
 
-        # --- Get Config ---
         ollama_endpoint = get_config_or_raise('OLLAMA_ENDPOINT')
         ollama_model = get_config_or_raise('OLLAMA_MODEL')
-        image_api_url_base = get_config_or_raise('IMAGE_API_URL') # A1111 URL
+        image_api_url_base = get_config_or_raise('IMAGE_API_URL')
 
         # --- Refine Prompt ---
-        print("--- Step 1: Refining prompt ---")
+        print(f"DEBUG: Refining image prompt: '{user_input_prompt}'")
         refinement_payload = {"model": ollama_model,"messages": [{"role": "system", "content": IMAGE_PROMPT_REFINEMENT_SYSTEM_PROMPT.strip()}, {"role": "user", "content": user_input_prompt}],"stream": False }
-        ollama_api_url = f"{ollama_endpoint}/api/chat"
-        print(f"*** CALLING OLLAMA (REFINE) *** -> URL: {ollama_api_url}")
-        refine_response = requests.post(ollama_api_url, json=refinement_payload, timeout=60); refine_response.raise_for_status()
+        refine_response = requests.post(f"{ollama_endpoint}/api/chat", json=refinement_payload, timeout=60); refine_response.raise_for_status()
         refined_prompt = refine_response.json().get('message', {}).get('content', '').strip() or user_input_prompt
-        template_context['last_refined_prompt'] = refined_prompt # Update context
-        print(f"Refined prompt: '{refined_prompt}'")
+        template_context['last_refined_prompt'] = refined_prompt
+        print(f"DEBUG: Refined prompt: '{refined_prompt}'")
 
-        # --- Prepare A1111 API Call (Handles Img2Img vs Text2Img) ---
-        print(f"--- Step 2: Calling A1111 --- (Image provided: {'Yes' if init_image_b64 else 'No'})")
-        if init_image_b64:
+        # --- Prepare and Call A1111 API ---
+        if init_image_b64: # Img2Img
             endpoint = f"{image_api_url_base}/sdapi/v1/img2img"
-            payload = {
-                "init_images": [init_image_b64],
-                "prompt": refined_prompt,
-                "negative_prompt": "ugly, deformed, blurry, text, watermark, signature, low quality, words",
-                "steps": 30, "cfg_scale": 7, "sampler_index": "Euler a",
-                "denoising_strength": 0.7, "seed": -1,
-                "width": 512, "height": 512 # Consider getting size from init_image if possible
-            }
-            print(f"Using img2img endpoint: {endpoint}")
-        else:
+            payload = {"init_images": [init_image_b64], "prompt": refined_prompt, "negative_prompt": "ugly, deformed, blurry, text, watermark, signature, low quality", "steps": 30, "cfg_scale": 7, "sampler_index": "Euler a", "denoising_strength": 0.7, "seed": -1, "width": 512, "height": 512}
+            print(f"DEBUG: Calling A1111 img2img: {endpoint}")
+        else: # Text2Img
             endpoint = f"{image_api_url_base}/sdapi/v1/txt2img"
-            payload = {
-                "prompt": refined_prompt,
-                "negative_prompt": "ugly, deformed, blurry, text, watermark, signature, low quality, words",
-                "steps": 25, "cfg_scale": 7, "sampler_index": "Euler a",
-                "seed": -1, "width": 512, "height": 512
-            }
-            print(f"Using txt2img endpoint: {endpoint}")
+            payload = {"prompt": refined_prompt, "negative_prompt": "ugly, deformed, blurry, text, watermark, signature, low quality", "steps": 25, "cfg_scale": 7, "sampler_index": "Euler a", "seed": -1, "width": 512, "height": 512}
+            print(f"DEBUG: Calling A1111 txt2img: {endpoint}")
+        payload.setdefault("width", 512); payload.setdefault("height", 512)
 
-        payload.setdefault("width", 512); payload.setdefault("height", 512) # Ensure defaults
-
-        # --- Call A1111 ---
-        print(f"*** CALLING A1111 (IMAGE) *** -> URL: {endpoint}")
         img_response = requests.post(endpoint, json=payload, timeout=180); img_response.raise_for_status()
-        response_data = img_response.json(); images = response_data.get('images')
+        response_data = img_response.json()
+        images = response_data.get('images')
         if images and images[0]:
             generated_image_b64_result = images[0]
-            # Update the shared state with the NEWLY generated image
+            # --- Update the SHARED state variable in the context ---
             template_context['last_init_image_base64'] = generated_image_b64_result
-            print("Image generated successfully.")
+            print("DEBUG: Image generated successfully.")
         else:
-            image_gen_error_message = f"A1111 API returned no image data. Info: {response_data.get('info', response_data)}"
+            image_gen_error_message = f"A1111 API returned no image data. Response: {response_data.get('info', response_data)}"
             print(f"WARN: {image_gen_error_message}")
 
-    # --- Error Handling ---
-    except ValueError as e: print(f"ERROR: {e}"); image_gen_error_message = str(e)
-    except ConnectionError as e: error_msg=f"DB Error: {e}"; image_gen_error_message = error_msg; print(error_msg)
-    except requests.exceptions.RequestException as e:
-        failed_url = ollama_api_url if 'ollama' in str(e).lower() else (endpoint if endpoint else image_api_url_base)
-        error_msg = f"API Connection Error: Could not connect to service at {failed_url}. {e}"
-        image_gen_error_message = error_msg; print(error_msg)
-    except requests.exceptions.Timeout as e:
-        error_msg = f"API Timeout Error: Request to service timed out. {e}"
-        image_gen_error_message = error_msg; print(error_msg)
-    except Exception as e:
-        print(f"!! UNEXPECTED Error in generate_image: {type(e).__name__} - {e}")
-        image_gen_error_message = f"An unexpected error occurred: {e}"
+    except requests.exceptions.Timeout: print("ERROR: Timeout calling image generation API."); image_gen_error_message = "Error: The request to the image generation service timed out."
+    except requests.exceptions.RequestException as e: print(f"ERROR: RequestException calling image generation API: {e}"); image_gen_error_message = f"Error connecting to image generation service: {e}"
+    except ValueError as e: print(f"ERROR: ValueError during image generation: {e}"); image_gen_error_message = str(e)
+    except Exception as e: print(f"ERROR: Unexpected error during image generation: {type(e).__name__} - {e}\n{traceback.format_exc()}"); image_gen_error_message = f"An unexpected error occurred: {e}"
 
-    # --- Update context with results for rendering ---
+    # --- Prepare full context for re-rendering the page ---
     template_context['generated_image_base64'] = generated_image_b64_result
     template_context['image_error'] = image_gen_error_message
-    # Clear other panel results
+    # Clear results from other panels
     template_context.pop('generated_audio_base64', None); template_context['audio_error'] = None
     template_context['video_status_message'] = None
 
-    print("Rendering dashboard after image generation attempt.")
-    return render_template('dashboard.html', **template_context)
+    # Fetch full context needed for the template
+    final_render_context = prepare_template_context(user_id_obj, template_context, conversation_id_str)
+    return render_template('dashboard.html', **final_render_context)
 
 # --- Audio Generation Route ---
 @views.route('/generate-audio', methods=['POST'])
 @login_required
 def generate_audio():
-    print("\n--- Handling POST to /generate-audio ---")
     user_id_obj = ObjectId(current_user.id)
-    # Get data from form
     text_to_speak = request.form.get('audio_text', '').strip()
     language_code = request.form.get('language_code', 'en')
     speaker_id_from_form = request.form.get('speaker_id')
     conversation_id_str = request.form.get('conversation_id')
 
-    # Prepare context for rendering, starting with form data
     template_context = {k: v for k, v in request.form.items()}
     template_context['last_audio_text'] = text_to_speak
     template_context['last_language_code'] = language_code
     template_context['last_speaker_id'] = speaker_id_from_form
 
-    # Initialize results
     generated_audio_b64_result = None
     audio_gen_error_message = None
     speaker_id_to_use = None
-    xtts_api_url_base = None
-    xtts_api_endpoint = None
 
     try:
-        # --- Validation & Augment Context ---
-        if not conversation_id_str: raise ValueError("No active conversation selected.")
-        if not text_to_speak: raise ValueError("Text for audio cannot be empty.")
-        if language_code not in SUPPORTED_LANGUAGES: raise ValueError(f"Invalid language: {language_code}")
-        full_context = prepare_template_context(user_id_obj, template_context, conversation_id_str)
-        template_context.update(full_context) # Add speakers, history etc.
+        if not conversation_id_str or not ObjectId.is_valid(conversation_id_str): raise ValueError("Cannot generate audio without an active conversation.")
+        if not text_to_speak: raise ValueError("Text for audio generation cannot be empty.")
+        if language_code not in SUPPORTED_LANGUAGES: raise ValueError(f"Invalid language code selected: {language_code}")
 
-        # --- Determine Speaker ---
-        available_speakers = template_context.get('available_speakers', [])
-        if not available_speakers: raise ValueError("No speakers loaded from TTS service.")
-        if speaker_id_from_form and speaker_id_from_form in available_speakers:
-            speaker_id_to_use = speaker_id_from_form
-        else:
-            speaker_id_to_use = available_speakers[0] # Default to first
-            if speaker_id_from_form: flash(f"Speaker '{speaker_id_from_form}' not found, using default.", category='warning')
-        template_context['last_speaker_id'] = speaker_id_to_use # Update context with actual used speaker
+        xtts_api_url_base = get_config_or_raise('XTTS_API_URL', default=None)
+        available_speakers = get_available_speakers(xtts_api_url_base)
+        template_context['available_speakers'] = available_speakers
 
-        # --- Get Config & Prepare API Call ---
-        xtts_api_url_base = get_config_or_raise('XTTS_API_URL')
-        xtts_api_endpoint = f"{xtts_api_url_base}/tts_to_audio" # Verify endpoint
+        if not available_speakers: raise ValueError("No speakers are available/loaded from the TTS service.")
+        if speaker_id_from_form and speaker_id_from_form in available_speakers: speaker_id_to_use = speaker_id_from_form
+        elif available_speakers: speaker_id_to_use = available_speakers[0]; print(f"WARN: Speaker '{speaker_id_from_form}' not found, defaulting to '{speaker_id_to_use}'."); flash(f"Selected speaker not available, used default.", category='warning')
+        else: raise ValueError("Cannot determine speaker to use.")
+        template_context['last_speaker_id'] = speaker_id_to_use
+
+        # --- Prepare and Call XTTS API ---
+        xtts_api_endpoint = f"{xtts_api_url_base}/tts_to_audio"
         payload = {"text": text_to_speak, "language": language_code, "speaker_wav": speaker_id_to_use, "options": {}}
         headers = {'Content-Type': 'application/json', 'Accept': 'audio/wav'}
-        print(f"*** CALLING XTTS *** -> URL: {xtts_api_endpoint} | Lang: {language_code} | Speaker: {speaker_id_to_use}")
+        print(f"DEBUG: Calling XTTS: {xtts_api_endpoint} with lang={language_code}, speaker={speaker_id_to_use}")
+        tts_response = requests.post(xtts_api_endpoint, json=payload, headers=headers, timeout=180); tts_response.raise_for_status()
 
-        # --- Call XTTS API ---
-        tts_response = requests.post(xtts_api_endpoint, json=payload, headers=headers, timeout=180)
-        tts_response.raise_for_status() # Check HTTP errors
-
-        # --- Process Response ---
-        content_type = tts_response.headers.get('Content-Type', '').lower()
-        if 'audio/wav' in content_type and tts_response.content:
+        if 'audio/wav' in tts_response.headers.get('Content-Type', '').lower() and tts_response.content:
             generated_audio_b64_result = base64.b64encode(tts_response.content).decode('utf-8')
-            print("Audio generated successfully.")
+            print("DEBUG: Audio generated successfully.")
         else:
-            error_detail = tts_response.text[:500] if tts_response.text else "(Empty Response Body)"
-            audio_gen_error_message = f"XTTS API Error: Status {tts_response.status_code}, Content-Type '{content_type}'. Response: {error_detail}"
-            print(f"WARN: {audio_gen_error_message}")
+            print(f"WARN: XTTS API did not return WAV audio. Status: {tts_response.status_code}, Content-Type: {tts_response.headers.get('Content-Type')}, Response text: {tts_response.text[:200]}")
+            audio_gen_error_message = f"XTTS API error (Status {tts_response.status_code}) or unexpected response type."
 
-    # --- Error Handling ---
-    except ValueError as e: print(f"ERROR: {e}"); audio_gen_error_message = str(e)
-    except ConnectionError as e: error_msg=f"DB Error: {e}"; audio_gen_error_message = error_msg; print(error_msg)
-    except requests.exceptions.RequestException as e:
-        error_msg = f"API Connection Error: Could not connect to TTS service at {xtts_api_url_base}. {e}"
-        audio_gen_error_message = error_msg; print(error_msg)
-    except requests.exceptions.Timeout as e:
-        error_msg = f"API Timeout Error: Request to TTS service timed out. {e}"
-        audio_gen_error_message = error_msg; print(error_msg)
-    except Exception as e:
-        print(f"!! UNEXPECTED Error in generate_audio: {type(e).__name__} - {e}")
-        audio_gen_error_message = f"An unexpected error occurred: {e}"
+    except requests.exceptions.Timeout: print("ERROR: Timeout calling audio generation API."); audio_gen_error_message = "Error: The request to the audio generation service timed out."
+    except requests.exceptions.RequestException as e: print(f"ERROR: RequestException calling audio generation API: {e}"); audio_gen_error_message = f"Error connecting to audio generation service: {e}"
+    except ValueError as e: print(f"ERROR: ValueError during audio generation: {e}"); audio_gen_error_message = str(e)
+    except Exception as e: print(f"ERROR: Unexpected error during audio generation: {type(e).__name__} - {e}\n{traceback.format_exc()}"); audio_gen_error_message = f"An unexpected error occurred: {e}"
 
-    # --- Update context with results for rendering ---
+    # --- Prepare full context for re-rendering the page ---
     template_context['generated_audio_base64'] = generated_audio_b64_result
     template_context['audio_error'] = audio_gen_error_message
-    # Clear other panel results
+    # Clear results from other panels
     template_context.pop('generated_image_base64', None); template_context['image_error'] = None
     template_context['video_status_message'] = None
 
-    print("Rendering dashboard after audio generation attempt.")
-    return render_template('dashboard.html', **template_context)
+    final_render_context = prepare_template_context(user_id_obj, template_context, conversation_id_str)
+    return render_template('dashboard.html', **final_render_context)
 
 # --- Video Generation Route ---
 @views.route('/generate-video', methods=['POST'])
 @login_required
 def generate_video():
-    print("\n--- Handling POST to /generate-video ---")
     user_id_obj = ObjectId(current_user.id)
-    # Get data from form
-    video_prompt = request.form.get('video_prompt', '').strip() # Motion prompt
-    init_image_b64 = request.form.get('last_init_image_base64') # Get image from SHARED state input
+    video_prompt = request.form.get('video_prompt', '').strip() # Get prompt, even if not used by payload
+    # Use the name of the SHARED hidden input field
+    init_image_b64 = request.form.get('last_init_image_base64')
     if not init_image_b64 or init_image_b64 == 'undefined': init_image_b64 = None
     conversation_id_str = request.form.get('conversation_id')
 
-    # Preserve ALL state from the form for the redirect
+    # Prepare state for redirect, starting with submitted form data
     redirect_state = {k: v for k, v in request.form.items()}
+    # Ensure the image *actually used* for this attempt is preserved
+    redirect_state['last_init_image_base64'] = init_image_b64
+    # Also preserve the entered video prompt
     redirect_state['last_video_prompt'] = video_prompt
-    redirect_state['last_init_image_base64'] = init_image_b64 # Pass back the image used
 
     status_message_for_redirect = None
     video_api_url = None
 
     try:
         # --- Validation ---
-        if not conversation_id_str: raise ValueError("No active conversation selected.")
-        if not init_image_b64: raise ValueError("Input image required for video generation.")
-        # if not video_prompt: raise ValueError("Video motion prompt cannot be empty.") # Optional validation
+        if not conversation_id_str or not ObjectId.is_valid(conversation_id_str): raise ValueError("Cannot generate video without an active conversation.")
+        if not init_image_b64: raise ValueError("Input image required for video generation. Upload/generate one first.")
 
         # --- Create ComfyUI Payload ---
-        print("--- Step 1: Creating ComfyUI SVD Payload ---")
+        print(f"DEBUG [generate_video]: Input image base64 present: {bool(init_image_b64)}")
         comfy_payload = create_svd_payload_from_api_json(init_image_b64)
         if not comfy_payload or not comfy_payload.get("prompt"):
-             raise ValueError("Failed to create valid ComfyUI payload (Check logs, workflow JSON path & Node IDs).")
+             raise ValueError("Failed to create valid ComfyUI payload. Check logs and workflow configuration.")
 
         # --- Call ComfyUI API ---
-        print("--- Step 2: Calling ComfyUI Video API ---")
-        video_api_url_base = get_config_or_raise('VIDEO_API_URL') # e.g., http://comfy:8188
+        video_api_url_base = get_config_or_raise('VIDEO_API_URL')
         video_api_url = f"{video_api_url_base}/prompt"
         print(f"*** CALLING COMFYUI (VIDEO) *** -> URL: {video_api_url}")
-        response = requests.post(video_api_url, json=comfy_payload, timeout=60)
-        response.raise_for_status()
+        response = requests.post(video_api_url, json=comfy_payload, timeout=60); response.raise_for_status()
         response_data = response.json(); prompt_id = response_data.get('prompt_id')
         print(f"DEBUG: ComfyUI Video Queue Response: {response_data}")
 
         if prompt_id:
-            status_message_for_redirect = f"Video job submitted! (ID: {prompt_id}). Check './output'."
+            status_message_for_redirect = f"Video generation job submitted (ID: {prompt_id}). Check './output' folder on host after processing."
             print(f"INFO: Video job {prompt_id} submitted.")
         else:
-            status_message_for_redirect = "Error: ComfyUI didn't return job ID."
-            print(f"ERROR: ComfyUI call succeeded but no prompt_id returned. Response: {response_data}")
+            print(f"ERROR: ComfyUI API call succeeded but did not return a prompt_id. Response: {response_data}")
+            status_message_for_redirect = "Error: Video job submitted but could not get Job ID from ComfyUI."
 
-    # --- Error Handling ---
-    except ValueError as e: print(f"ERROR: {e}"); status_message_for_redirect = str(e)
-    except ConnectionError as e: error_msg=f"DB Error: {e}"; status_message_for_redirect = error_msg; print(error_msg)
-    except FileNotFoundError as e: print(f"ERROR: {e}"); status_message_for_redirect = f"Config Error: Video workflow file not found."
-    except requests.exceptions.RequestException as e:
-        error_msg = f"API Connection Error: Could not connect to Video service at {video_api_url or get_config_or_raise('VIDEO_API_URL','?')}. {e}"
-        status_message_for_redirect = error_msg; print(error_msg)
-    except requests.exceptions.Timeout as e:
-        error_msg = f"API Timeout Error: Request to Video service timed out. {e}"
-        status_message_for_redirect = error_msg; print(error_msg)
-    except Exception as e:
-        print(f"!! UNEXPECTED Error in generate_video: {type(e).__name__} - {e}")
-        status_message_for_redirect = f"An unexpected error occurred: {e}"
+    except requests.exceptions.Timeout: print(f"ERROR: Timeout calling ComfyUI video API at {video_api_url}"); status_message_for_redirect = "Error: The request to the video generation service timed out."
+    except requests.exceptions.RequestException as e: print(f"ERROR: RequestException calling ComfyUI video API: {e}. URL: {video_api_url}"); status_message_for_redirect = f"Error connecting to video generation service: {e}"
+    except FileNotFoundError as e: print(f"ERROR: {e}"); status_message_for_redirect = f"Configuration Error: Video workflow file not found."
+    except ValueError as e: print(f"ERROR: ValueError during video generation setup: {e}"); status_message_for_redirect = str(e) # Show the specific validation error
+    except Exception as e: print(f"ERROR: Unexpected error during video generation: {type(e).__name__} - {e}\n{traceback.format_exc()}"); status_message_for_redirect = f"An unexpected error occurred: {e}"
 
-    # Set status message for redirect state
+    # --- Prepare state for redirect ---
     redirect_state['video_status_message'] = status_message_for_redirect
-    # Clear other panel results before redirect
+    # Clear results from other panels
     redirect_state.pop('generated_image_base64', None); redirect_state.pop('image_error', None)
     redirect_state.pop('generated_audio_base64', None); redirect_state.pop('audio_error', None)
 
-    # --- FIX: Redirect using **redirect_state to pass all keyword arguments ---
-    print(f"Redirecting to dashboard after video gen attempt with conversation_id: {conversation_id_str}")
+    # --- Redirect back to dashboard ---
+    # Pass the full state via keyword arguments using **
     return redirect(url_for('views.dashboard', **redirect_state))
