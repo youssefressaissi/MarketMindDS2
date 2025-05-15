@@ -1,185 +1,27 @@
-# --- Base service definition ---
-x-base_service: &base_service
-    volumes:
-      - &v1 ./data:/data         # Shared mount for models, configs etc.
-      - &v2 ./output:/output     # Shared mount for generated output (Ensure Comfy uses this!)
-    stop_signal: SIGKILL
-    tty: true
-    deploy:
-      resources:
-        reservations:
-          devices:
-              - driver: nvidia
-                device_ids: ['0'] # Use specific GPU ID '0' by default
-                capabilities: [compute, utility]
-    restart: unless-stopped
-    networks:
-      - marketmind_net
+version: '3.8'
 
-# --- Project Name ---
-name: marketmind-ai
-
-# --- Define Named Network --
-networks:
-  marketmind_net:
-    driver: bridge
-
-# --- Define Named Volumes ---
-volumes:
-  mongo_data:                  # Volume for MongoDB persistent data
-  ollama_data:                 # Volume for Ollama downloaded models
-  # xtts_models: # This seemed unused, removed unless needed by XTTS service internally
-
-# --- Service Definitions ---
 services:
-
-  # --- Flask Application Service ---
-  flask_app:
-    build: ./Flask_app
-    container_name: flask_frontend
+  backend:
+    build: ./backend
     ports:
-      - "5003:5000" # Host port 5003 maps to container port 5000
-    environment:
-      - MONGO_URL=mongodb://mongo:27017/marketmind_db
-      - IMAGE_API_URL=http://auto:7860
-      - OLLAMA_ENDPOINT=http://ollama:11434
-      - XTTS_API_URL=http://xtts-service:8020
-      - VIDEO_API_URL=http://comfy:8188 # <-- ADDED ComfyUI API URL
-      - OLLAMA_MODEL=llama3
-      - FLASK_SECRET_KEY=CHANGE_THIS_TO_A_VERY_SECURE_RANDOM_STRING_NOW
-      - FLASK_ENV=development
-    volumes:
-      - ./Flask_app:/app # Mount code for development
-      - ./output:/app/output:ro # Mount output read-only (optional)
-    networks:
-      - marketmind_net
+      - "3000:3000"
     depends_on:
-      mongo:
-        condition: service_healthy
-      ollama:
-        condition: service_started
-      auto:
-        condition: service_started
-      xtts-service:
-        condition: service_started
-      comfy: # <-- ADDED dependency on ComfyUI
-        condition: service_started # Assumes comfy starts listening quickly
-    restart: unless-stopped
-
-  # --- AUTOMATIC1111 GPU Service (DEFAULT IMAGE GENERATION) ---
-  auto: &automatic
-    <<: *base_service # Inherits volumes, network, deploy, restart
-    container_name: automatic1111_gpu
-    ports:
-      - "${WEBUI_PORT:-7860}:7860"
-    build: ./services/AUTOMATIC1111/ # Assuming this build context exists
+      - llm-service
     environment:
-      - CLI_ARGS=--allow-code --medvram --xformers --enable-insecure-extension-access --api --listen --port 7860
-
-  # --- AUTOMATIC1111 CPU Service (ALTERNATIVE) ---
-  auto-cpu:
-    <<: *automatic # Inherits basic settings
-    container_name: automatic1111_cpu
-    ports: # Needs its own port mapping if run simultaneously, or use profiles
-      - "7860:7860" # Example: Expose on different host port if needed
-    profiles: ["auto-cpu"]       # Keep Profile - Run explicitly
-    deploy: {} # Override deploy to remove GPU allocation
-    environment:
-      - CLI_ARGS=--no-half --precision full --use-cpu all --skip-torch-cuda-test --allow-code --enable-insecure-extension-access --api --listen --port 7860
-
-  # --- ComfyUI GPU Service (VIDEO GENERATION) ---
-  comfy: &comfy
-    <<: *base_service # Inherits volumes (incl output), network, deploy (GPU), restart
-    
-    container_name: comfyui_gpu
-    ports:
-      - "${COMFY_PORT:-8188}:8188" # Default ComfyUI port
-    # Use profiles if you only want to run it explicitly, remove if it should always run
-    # profiles: ["comfy"]
-    build: ./services/comfy/    # Assuming this build context exists
-    # image: sd-comfy:7           # Use image if preferred over build
-    environment:
-      # Add any specific ComfyUI env vars here
-      - CLI_ARGS=--listen 0.0.0.0 --port 8188    # GPU is inherited from base_service deploy block
-
-  # --- ComfyUI CPU Service (ALTERNATIVE) ---
-  comfy-cpu:
-    <<: *comfy # Inherits basic settings, volumes, network
-    container_name: comfyui_cpu
-    ports: # Needs its own port mapping if run simultaneously
-      - "8189:8188" # Example: Expose on different host port
-    profiles: ["comfy-cpu"]      # Keep Profile - Run explicitly
-    deploy: {} # Override deploy to remove GPU allocation
-    environment:
-      - CLI_ARGS=--cpu --listen 8188 # Add --cpu flag
-
-  # --- MongoDB Service ---
-  mongo:
-    image: mongo:latest
-    container_name: mongo
-    ports:
-      - "27017:27017"
-    volumes:
-      - mongo_data:/data/db
+      - NODE_ENV=production
+      - LLM_SERVICE_URL=http://llm-service:8000  
     networks:
-      - marketmind_net
-    restart: unless-stopped
-    healthcheck:
-      test: ["CMD", "mongosh", "--eval", "db.adminCommand('ping')"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
-      start_period: 10s
+      - app-network
 
-  # --- Ollama Service ---
-  ollama:
-    image: ollama/ollama:latest
-    container_name: ollama_service
+  llm-service:
+    build: ./llm-service
     ports:
-      - "11434:11434"
-    volumes:
-      - ollama_data:/root/.ollama
+      - "8000:8000"
+    environment:
+      - PORT=8000
     networks:
-      - marketmind_net
-    deploy: # Use GPU
-      resources:
-        reservations:
-          devices:
-              - driver: nvidia
-                device_ids: ['0']
-                capabilities: [gpu]
-    restart: unless-stopped
+      - app-network
 
-  # --- XTTS Text-to-Speech Service ---
-  xtts-service:
-    image: daswer123/xtts-api-server:latest
-    container_name: xtts_service
-    ports:
-      - "8020:8020"
-    volumes:
-      # Ensure these host paths exist and contain the required files!
-      - ./data/models/xtts:/app/models  # XTTS base model files (e.g., v2.0.3 folder)
-      - ./xtts/speakers:/app/xtts/actors       # Your speaker .wav files
-      - ./output/audio:/app/output_audio # Save generated audio to shared output/audio
-    networks:
-      - marketmind_net
-    command: [ # Use command for args
-        "python3", "-m", "xtts_api_server",
-        "-v", "v2.0.3", # Specify model version
-        "--port", "8020",
-        "--host", "0.0.0.0",
-        "--device", "cuda:0", # Use GPU 0
-        "--model-folder", "/app/models", # Point to volume mount
-        "--speaker-folder", "/app/xtts/actors", # Point to volume mount
-        "--output", "/app/output_audio", # Point to volume mount
-        "--use-cache",
-        "--lowvram" # Optional: if needed
-      ]
-    deploy: # Allocate GPU
-      resources:
-        reservations:
-          devices:
-              - driver: nvidia
-                device_ids: ['0']
-                capabilities: [gpu]
-    restart: unless-stopped
+networks:
+  app-network:
+    driver: bridge
