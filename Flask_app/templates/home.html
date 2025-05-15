@@ -4,7 +4,7 @@
 
 {% block content %}
 <!-- Hero Section -->
-<section class="min-h-[80vh] flex items-center">
+<section class="min-h-screen flex items-center overflow-y-auto">
   <div class="container mx-auto px-6 py-16 md:py-24 flex flex-col md:flex-row items-center gap-12">
     <!-- Left Column - Text Content -->
     <div class="md:w-1/2 space-y-6">
@@ -32,13 +32,11 @@
 
     <!-- Right Column - Image Placeholder -->
     <div class="md:w-1/2 flex justify-center">
-      
-        <img src="{{ url_for('static', filename='images/marketmind3.png') }}" 
-             alt="MarketMind Hero Image" 
-            class="w-full">
-      
+      <img src="{{ url_for('static', filename='images/marketmind3.png') }}" 
+           alt="MarketMind Hero Image" 
+           class="w-full">
     </div>
-  
+  </div>
 </section>
 
 <!-- Features Section (Optional) -->

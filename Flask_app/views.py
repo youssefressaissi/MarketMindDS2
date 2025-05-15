@@ -67,6 +67,7 @@ def get_available_speakers(xtts_api_url_base):
         print("WARN: XTTS_API_URL not configured, cannot fetch speakers.")
         return []
     try:
+        # Assume common endpoint, verify with your specific XTTS API server docs
         speakers_endpoint = f"{xtts_api_url_base}/speakers_list"
         print(f"DEBUG: Fetching speakers from {speakers_endpoint}")
         # Set a reasonable timeout
