@@ -4,10 +4,11 @@
 {% block title %}Dashboard - MarketMind AI{% endblock %}
 
 {% block content %}
-{# Main dashboard container #}
+{# Main dashboard container - this fills the 'main#main-content' block from base.html #}
 <div class="relative flex h-full bg-slate-50 overflow-hidden">
 
   <!-- **** SHARED HIDDEN INPUT FOR IMAGE STATE **** -->
+  <!-- This one is primarily for JS to read/write the shared state -->
   <input type="hidden" id="shared_init_image_base64" value="{{ last_init_image_base64 | default('', true) }}">
   <!-- ********************************************* -->
 
@@ -54,7 +55,7 @@
       </div>
       {# Content - Image Generation Form and Display #}
       <form id="image-gen-form" action="{{ url_for('views.generate_image') }}" method="POST" class="p-4 sm:p-6 flex-shrink-0">
-          {# Hidden fields #}
+          {# Hidden fields to pass ALL current state back to the server #}
           <input type="hidden" name="conversation_id" value="{{ active_conversation_id | default('', true) }}">
           <input type="hidden" name="topic" value="{{ last_topic | default('', true) }}">
           <input type="hidden" name="audio_text" value="{{ last_audio_text | default('', true) }}">
@@ -63,7 +64,8 @@
           <input type="hidden" name="generated_audio_base64" value="{{ generated_audio_base64 | default('', true) }}">
           <input type="hidden" name="video_prompt" value="{{ last_video_prompt | default('', true) }}">
           <input type="hidden" name="video_status_message" value="{{ video_status_message | default('', true) }}">
-          <input type="hidden" name="last_init_image_base64" value="{{ last_init_image_base64 | default('', true) }}"> {# Carries shared image state for the form #}
+          {# This form needs to submit the shared image state if it's an img2img operation #}
+          <input type="hidden" id="image_form_init_image_base64" name="init_image_base64" value="{{ last_init_image_base64 | default('', true) }}">
 
           {# Text Prompt Input #}
           <div class="mb-4">
@@ -88,9 +90,11 @@
               <p class="text-xs text-slate-500 mt-1">Upload an image OR use one generated below. This image will be used for Img2Img or Video Generation.</p>
           </div>
           {# Submit Button for Image Generation #}
-          <button type="submit" id="image-submit-button" class="w-full bg-purple-600 hover:bg-purple-700 text-white font-semibold py-2.5 px-4 rounded-lg focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-purple-500 transition duration-150 ease-in-out shadow-sm text-sm {% if not active_conversation_id %} disabled bg-gray-400 cursor-not-allowed {% endif %}" {% if not active_conversation_id %} title="Please select or start a business chat first." {% endif %}>
-              Generate Image
-          </button>
+          <button type="submit" id="image-submit-button" class="w-full flex items-center justify-center bg-purple-600 hover:bg-purple-700 text-white font-semibold py-2.5 px-4 rounded-lg focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-purple-500 transition duration-150 ease-in-out shadow-sm text-sm {% if not active_conversation_id %} disabled bg-gray-400 cursor-not-allowed {% endif %}" {% if not active_conversation_id %} title="Please select or start a business chat first." {% endif %}>
+    <span class="button-text">Generate Image</span>
+    {# The loading indicator div for THIS button #}
+    <span id="image-loading-indicator" class="loading-spinner hidden ml-2"><div class="spinner spinner-purple"></div></span>
+</button>
       </form>
       {# --- Image Result Display Area --- #}
       <div class="mt-4 p-4 sm:p-6 text-center flex flex-col border-t border-slate-200 min-h-[200px] flex-grow">
@@ -136,7 +140,7 @@
                     </div>
                 </div>
            {% elif image_error %}
-               <div class-="flex-grow flex items-center justify-center text-red-600 italic text-sm">Image generation failed. See error below.</div>
+               <div class="flex-grow flex items-center justify-center text-red-600 italic text-sm">Image generation failed. See error below.</div>
            {% else %}
                <div class="flex-grow flex items-center justify-center text-slate-500 italic text-sm">Generated or uploaded input image will appear here.</div>
            {% endif %}
@@ -147,11 +151,6 @@
                <span class="block mt-1 whitespace-pre-wrap">{{ image_error }}</span>
            </div>
            {% endif %}
-           {# Loading Indicator #}
-           <div id="image-loading-indicator" class="hidden mt-4 text-center flex items-center justify-center">
-               <div class="spinner mr-2"></div>
-               <span>Generating Image...</span>
-           </div>
       </div>
   </aside>
   <!-- **** End Right Image Panel **** -->
@@ -175,7 +174,7 @@
            <input type="hidden" name="generated_image_base64" value="{{ generated_image_base64 | default('', true) }}">
            <input type="hidden" name="video_prompt" value="{{ last_video_prompt | default('', true) }}">
            <input type="hidden" name="video_status_message" value="{{ video_status_message | default('', true) }}">
-           <input type="hidden" name="last_init_image_base64" value="{{ last_init_image_base64 | default('', true) }}"> {# Carries shared image state for the form #}
+           <input type="hidden" id="audio_form_init_image_base64" name="last_init_image_base64" value="{{ last_init_image_base64 | default('', true) }}"> {# Carries shared image state for the form #}
 
 
            {# Language #}
@@ -212,9 +211,10 @@
                 <p class="text-xs text-slate-500 mt-1">Use text from chat or write your own script.</p>
            </div>
            {# Submit #}
-           <button type="submit" id="audio-submit-button" class="w-full text-white font-semibold py-2.5 px-4 rounded-lg focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-teal-500 transition duration-150 ease-in-out shadow-sm text-sm {% if not active_conversation_id or not available_speakers %} bg-gray-400 cursor-not-allowed {% else %} bg-teal-600 hover:bg-teal-700 {% endif %}" {% if not active_conversation_id or not available_speakers %} disabled {% endif %} title="{% if not active_conversation_id %}Please select or start a business chat first.{% elif not available_speakers %}No speakers available for generation.{% else %}Generate Audio{% endif %}">
-                Generate Audio
-           </button>
+           <button type="submit" id="audio-submit-button" class="w-full flex items-center justify-center text-white font-semibold py-2.5 px-4 rounded-lg focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-teal-500 transition duration-150 ease-in-out shadow-sm text-sm {% if not active_conversation_id or not available_speakers %} bg-gray-400 cursor-not-allowed {% else %} bg-teal-600 hover:bg-teal-700 {% endif %}" {% if not active_conversation_id or not available_speakers %} disabled {% endif %} title="{% if not active_conversation_id %}Please select or start a business chat first.{% elif not available_speakers %}No speakers available for generation.{% else %}Generate Audio{% endif %}">
+    <span class="button-text">Generate Audio</span>
+    <span id="audio-loading-indicator" class="loading-spinner hidden ml-2"><div class="spinner spinner-teal"></div></span>
+</button>
       </form>
       {# Result Area #}
       <div class="mt-4 p-4 sm:p-6 text-center flex flex-col border-t border-slate-200 min-h-[150px] flex-grow">
@@ -245,11 +245,6 @@
                <span class="block mt-1">{{ audio_error }}</span>
            </div>
            {% endif %}
-            {# Loading Indicator #}
-           <div id="audio-loading-indicator" class="hidden mt-4 text-center flex items-center justify-center">
-               <div class="spinner mr-2"></div>
-               <span>Generating Audio...</span>
-           </div>
       </div>
   </aside>
   <!-- **** End Right Audio Panel **** -->
@@ -275,7 +270,7 @@
            <input type="hidden" name="language_code" value="{{ last_language_code | default('en', true) }}">
            <input type="hidden" name="speaker_id" value="{{ last_speaker_id | default('', true) }}">
            <input type="hidden" name="generated_audio_base64" value="{{ generated_audio_base64 | default('', true) }}">
-           {# === ADD Hidden input specifically for this form to carry the image state === #}
+           {# === Hidden input specifically for this form to carry the image state === #}
            <input type="hidden" id="video_form_init_image_base64" name="last_init_image_base64" value="{{ last_init_image_base64 | default('', true) }}">
 
            {# --- Display Input Image (Reads from shared state)--- #}
@@ -290,7 +285,7 @@
                  <p class="text-xs text-slate-500 mt-1 {% if not last_init_image_base64 %}hidden{% endif %}"> Image from Visual panel is used. </p>
             </div>
 
-           {# Video Prompt Input - REMOVED 'required' attribute #}
+           {# Video Prompt Input - REMOVED 'required' attribute as it's optional for the SVD workflow #}
            <div class="mb-4">
                 <label for="video_prompt" class="block text-slate-700 text-sm font-semibold mb-2"> Video Motion Description (Optional): </label>
                 <textarea id="video_prompt" name="video_prompt" rows="3" class="shadow-sm appearance-none border border-slate-300 rounded-lg w-full py-2 px-3 text-gray-700 text-sm leading-tight focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-y" placeholder="Describe desired animation or motion...">{{ last_video_prompt | default('', true) }}</textarea>
@@ -298,9 +293,10 @@
            </div>
 
            {# Submit Button - Enabled based on image presence #}
-           <button type="submit" id="video-submit-button" class="w-full text-white font-semibold py-2.5 px-4 rounded-lg focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition duration-150 ease-in-out shadow-sm text-sm {% if not active_conversation_id or not last_init_image_base64 %} bg-gray-400 cursor-not-allowed {% else %} bg-blue-600 hover:bg-blue-700 {% endif %}" {% if not active_conversation_id or not last_init_image_base64 %} disabled {% endif %} title="{% if not active_conversation_id %}Select chat first.{% elif not last_init_image_base64 %}Input image required.{% else %}Generate Video{% endif %}">
-                Generate Video (GIF)
-            </button>
+           <button type="submit" id="video-submit-button" class="w-full flex items-center justify-center text-white font-semibold py-2.5 px-4 rounded-lg focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition duration-150 ease-in-out shadow-sm text-sm {% if not active_conversation_id or not last_init_image_base64 %} bg-gray-400 cursor-not-allowed {% else %} bg-blue-600 hover:bg-blue-700 {% endif %}" {% if not active_conversation_id or not last_init_image_base64 %} disabled {% endif %} title="{% if not active_conversation_id %}Select chat first.{% elif not last_init_image_base64 %}Input image required.{% else %}Generate Video{% endif %}">
+    <span class="button-text">Generate Video (GIF)</span>
+    <span id="video-loading-indicator" class="loading-spinner hidden ml-2"><div class="spinner spinner-blue"></div></span>
+</button>
       </form>
       {# Video Status/Result Display Area #}
       <div class="mt-4 p-4 sm:p-6 text-center flex flex-col border-t border-slate-200 min-h-[150px] flex-grow">
@@ -319,13 +315,6 @@
            {% else %}
                  <div class="flex-grow flex items-center justify-center text-slate-500 italic text-sm">Video generation status will appear here.<br>(Requires an input image from the Visual panel)</div>
            {% endif %}
-            {# Loading Indicator #}
-           <div id="video-loading-indicator" class="hidden mt-4 text-center flex items-center justify-center">
-               <div class="spinner mr-2"></div>
-               <span>Generating Video...</span>
-           </div>
-           {# Future location for displaying the video if implemented #}
-           {# <div id="video-display-area"></div> #}
       </div>
   </aside>
   <!-- **** End Right Video Panel **** -->
@@ -432,31 +421,32 @@
       <!-- Chat Input Form -->
       <div class="flex-shrink-0 p-4 sm:p-6 border-t border-slate-200 bg-white shadow-inner">
           <form id="text-prompt-form" action="{{ url_for('views.generate_text_prompt') }}" method="POST" class="flex items-center space-x-3">
-              {# Hidden fields for state #}
+              {# Hidden fields for ALL state #}
               <input type="hidden" name="conversation_id" value="{{ active_conversation_id | default('', true) }}">
               <input type="hidden" name="image_prompt" value="{{ last_image_prompt | default('', true) }}">
               <input type="hidden" name="last_refined_prompt" value="{{ last_refined_prompt | default('', true) }}">
               <input type="hidden" name="generated_image_base64" value="{{ generated_image_base64 | default('', true) }}">
+              <input type="hidden" id="text_form_init_image_base64" name="last_init_image_base64" value="{{ last_init_image_base64 | default('', true) }}"> {# Carries shared image state for the form #}
               <input type="hidden" name="audio_text" value="{{ last_audio_text | default('', true) }}">
               <input type="hidden" name="language_code" value="{{ last_language_code | default('en', true) }}">
               <input type="hidden" name="speaker_id" value="{{ last_speaker_id | default('', true) }}">
               <input type="hidden" name="generated_audio_base64" value="{{ generated_audio_base64 | default('', true) }}">
               <input type="hidden" name="video_prompt" value="{{ last_video_prompt | default('', true) }}">
               <input type="hidden" name="video_status_message" value="{{ video_status_message | default('', true) }}">
-              <input type="hidden" name="last_init_image_base64" value="{{ last_init_image_base64 | default('', true) }}"> {# Carries shared image state for the form #}
 
+              {# Text Input Area #}
               <label for="topic" class="sr-only">Your Message:</label>
               <textarea id="topic" name="topic" rows="1" required class="flex-grow shadow-sm appearance-none border border-slate-300 rounded-lg py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent resize-none text-sm" placeholder="Ask for marketing ideas, content suggestions...">{{ last_topic | default('', true) }}</textarea>
-              <button type="submit" id="text-submit-button" title="Send Message" class="flex-shrink-0 bg-primary hover:bg-primary-dark text-white font-semibold p-2 rounded-lg focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 transition duration-150 ease-in-out shadow-sm">
-                  <svg class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor"> <path d="M10.894 2.553a1 1 0 00-1.788 0l-7 14a1 1 0 001.169 1.409l5-1.429A1 1 0 009 15.571V11a1 1 0 112 0v4.571a1 1 0 00.725.962l5 1.428a1 1 0 001.17-1.408l-7-14z" /> </svg>
-              </button>
+              {# Submit Button #}
+              <button type="submit" id="text-submit-button" title="Send Message" class="flex-shrink-0 flex items-center justify-center bg-primary hover:bg-primary-dark text-white font-semibold p-2 rounded-lg focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 transition duration-150 ease-in-out shadow-sm">
+    <span class="button-text">
+        <svg class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor"> <path d="M10.894 2.553a1 1 0 00-1.788 0l-7 14a1 1 0 001.169 1.409l5-1.429A1 1 0 009 15.571V11a1 1 0 112 0v4.571a1 1 0 00.725.962l5 1.428a1 1 0 001.17-1.408l-7-14z" /> </svg>
+    </span>
+    {# The loading indicator div for THIS button #}
+    <span id="text-loading-indicator" class="loading-spinner hidden"><div class="spinner spinner-small"></div></span>
+</button>
           </form>
            <p class="text-xs text-slate-500 mt-2 text-center">MarketMind can help brainstorm ideas. Always review suggestions.</p>
-            {# Loading Indicator #}
-           <div id="text-loading-indicator" class="hidden mt-2 text-center flex items-center justify-center text-slate-600">
-               <div class="spinner spinner-small mr-2"></div>
-               <span>Thinking...</span>
-           </div>
       </div>
 
   </main>
@@ -502,6 +492,8 @@
         videoPromptTextarea.focus();
         videoPromptTextarea.dispatchEvent(new Event('input', { bubbles: true }));
         autoResizeTextarea(videoPromptTextarea);
+        // Also, ensure the image used for this video prompt is set if logic allows
+        // For now, just opens the panel
         if (!isPanelOpen('video')) { togglePanel('video', true); }
     }
  }
@@ -525,28 +517,17 @@
  // --- Trigger video generation using the shared image state ---
  function triggerVideoFromImage(imageBase64) {
     const sharedHiddenImageInput = document.getElementById('shared_init_image_base64');
-    const videoPromptTextarea = document.getElementById('video_prompt');
-    const imagePreview = document.getElementById('init_image_preview'); // In Image Panel
-    const imagePreviewContainer = document.getElementById('init-image-preview-container');
-    const videoInputPreview = document.getElementById('video-input-image-preview');
-    const videoInputPreviewContainer = document.getElementById('video-input-image-preview-container');
-    const videoInputPlaceholder = document.getElementById('video-input-image-placeholder');
-    const videoGenerateButton = document.getElementById('generate-video-button');
-    // *** Get the hidden input INSIDE the video form ***
+    // Update Video Panel form's hidden input
     const videoFormImageInput = document.getElementById('video_form_init_image_base64');
+    if (videoFormImageInput) videoFormImageInput.value = imageBase64;
 
-    if (sharedHiddenImageInput && videoPromptTextarea && imagePreview && imagePreviewContainer && videoInputPreview && videoInputPreviewContainer && videoInputPlaceholder && videoGenerateButton && videoFormImageInput) {
-        sharedHiddenImageInput.value = imageBase64;
-        videoFormImageInput.value = imageBase64; // *** Also update the form-specific input ***
-        const dataUrl = `data:image/png;base64,${imageBase64}`;
-        // Update previews
-        imagePreview.src = dataUrl; imagePreview.classList.remove('hidden'); imagePreviewContainer.classList.remove('hidden');
-        videoInputPreview.src = dataUrl; videoInputPreviewContainer.classList.remove('hidden'); videoInputPlaceholder.classList.add('hidden');
-        // Enable Video Button
-        videoGenerateButton.disabled = false; videoGenerateButton.classList.remove('bg-gray-400', 'cursor-not-allowed'); videoGenerateButton.classList.add('bg-blue-600', 'hover:bg-blue-700'); videoGenerateButton.title = "Generate Video";
-        // Open video panel if closed
-        if (!isPanelOpen('video')) { togglePanel('video', true); }
-    } else { console.error("Missing elements for triggerVideoFromImage"); alert("Error setting up video generation."); }
+    // Update UI (previews, button state)
+    updateSharedImageState(imageBase64); // This will update both image and video panel previews and buttons
+
+    // Open video panel if closed and focus
+    if (!isPanelOpen('video')) { togglePanel('video', true); }
+    const videoPromptTextarea = document.getElementById('video_prompt');
+    if (videoPromptTextarea) videoPromptTextarea.focus();
  }
 
 
@@ -597,169 +578,137 @@
     document.querySelectorAll('textarea').forEach(textarea => { textarea.addEventListener('input', () => autoResizeTextarea(textarea)); textarea.addEventListener('focus', () => autoResizeTextarea(textarea)); textarea.addEventListener('blur', () => autoResizeTextarea(textarea)); autoResizeTextarea(textarea); });
 
     // --- Shared Image State Handling (using a SHARED hidden input and form-specific inputs) ---
-    const imageUploadInput = document.getElementById('init_image_upload'); // Input file element
-    const imagePreviewContainer = document.getElementById('init-image-preview-container'); // Container for preview image
-    const imagePreview = document.getElementById('init-image-preview'); // Img element for preview in Image Panel
-    const sharedHiddenImageInput = document.getElementById('shared_init_image_base64'); // *** The SHARED hidden input ***
-    const clearImageButton = document.getElementById('clear-init-image'); // Button to clear image
-    const videoInputPreviewContainer = document.getElementById('video-input-image-preview-container'); // Container for preview image in Video Panel
-    const videoInputPreview = document.getElementById('video-input-image-preview'); // Img element for preview in Video Panel
-    const videoInputPlaceholder = document.getElementById('video-input-image-placeholder'); // Text placeholder for video input image
-    const videoGenerateButton = document.getElementById('video-submit-button'); // Submit button in Video Panel
-    // *** Get hidden inputs INSIDE the FORMS ***
-    const imageFormImageInput = document.getElementById('image_form_init_image_base64'); // Hidden input in Image form
-    const audioFormImageInput = document.getElementById('audio_form_init_image_base64'); // Hidden input in Audio form
-    const videoFormImageInput = document.getElementById('video_form_init_image_base64'); // Hidden input in Video form
-    const textFormImageInput = document.getElementById('text_form_init_image_base64'); // Hidden input in Text form
+    const imageUploadInput = document.getElementById('init_image_upload');
+    const imagePreviewContainer = document.getElementById('init-image-preview-container');
+    const imagePreview = document.getElementById('init-image-preview');
+    const sharedHiddenImageInput = document.getElementById('shared_init_image_base64');
+    const clearImageButton = document.getElementById('clear-init-image');
+    const videoInputPreviewContainer = document.getElementById('video-input-image-preview-container');
+    const videoInputPreview = document.getElementById('video-input-image-preview');
+    const videoInputPlaceholder = document.getElementById('video-input-image-placeholder');
+    const videoGenerateButton = document.getElementById('video-submit-button');
+    // Hidden inputs within each form that needs the shared image state
+    const imageFormImageInput = document.getElementById('image_form_init_image_base64');
+    const audioFormImageInput = document.getElementById('audio_form_init_image_base64');
+    const videoFormImageInput = document.getElementById('video_form_init_image_base64');
+    const textFormImageInput = document.getElementById('text_form_init_image_base64');
 
-    // Function to update the shared hidden input AND all form-specific hidden inputs
-    function updateSharedImageState(base64) {
-        const safeBase64 = base64 || ''; // Treat null/undefined as empty string
+    // --- Function to update the shared hidden input AND all form-specific hidden inputs, and UI elements ---
+    window.updateSharedImageState = function(base64) { // Make it global for triggerVideoFromImage
+        const safeBase64 = base64 || '';
+        // Update the primary shared state input
         if (sharedHiddenImageInput) sharedHiddenImageInput.value = safeBase64;
+        // Update hidden inputs within each form
         if (imageFormImageInput) imageFormImageInput.value = safeBase64;
         if (audioFormImageInput) audioFormImageInput.value = safeBase64;
         if (videoFormImageInput) videoFormImageInput.value = safeBase64;
         if (textFormImageInput) textFormImageInput.value = safeBase64;
 
-        // Update UI based on whether an image is present
+        // Update UI elements based on whether an image is present
         const hasImage = !!safeBase64;
         const dataUrl = hasImage ? `data:image/png;base64,${safeBase64}` : '#';
 
+        // Update Image Panel Preview
         if (imagePreview) { imagePreview.src = dataUrl; imagePreview.classList.toggle('hidden', !hasImage); }
         if (imagePreviewContainer) imagePreviewContainer.classList.toggle('hidden', !hasImage);
-
-        if (videoInputPreview) { videoInputPreview.src = dataUrl; videoInputPreview.classList.toggle('hidden', !hasImage); }
+        // Update Video Panel Preview
+        if (videoInputPreview) { videoInputPreview.src = dataUrl; } // videoInputPreview.classList.toggle('hidden', !hasImage); (container handles visibility)
         if (videoInputPreviewContainer) videoInputPreviewContainer.classList.toggle('hidden', !hasImage);
         if (videoInputPlaceholder) videoInputPlaceholder.classList.toggle('hidden', hasImage);
-
+        // Update Video Button State
         if (videoGenerateButton) {
-            // Button is enabled ONLY if there is an image
-            const canGenerateVideo = hasImage;
-
+            const isActiveConvo = document.querySelector('input[name="conversation_id"]')?.value; // Simple check if convo ID is set
+            const canGenerateVideo = hasImage && isActiveConvo;
             videoGenerateButton.disabled = !canGenerateVideo;
             videoGenerateButton.classList.toggle('bg-gray-400', !canGenerateVideo);
             videoGenerateButton.classList.toggle('cursor-not-allowed', !canGenerateVideo);
             videoGenerateButton.classList.toggle('bg-blue-600', canGenerateVideo);
             videoGenerateButton.classList.toggle('hover:bg-blue-700', canGenerateVideo);
-
-            // Update the title based only on image presence
-            if (!hasImage) {
-                 videoGenerateButton.title = "Input image required.";
-            } else {
-                videoGenerateButton.title = "Generate Video"; // No chat requirement
-            }
+            if (!isActiveConvo) videoGenerateButton.title = "Select chat first.";
+            else if (!hasImage) videoGenerateButton.title = "Input image required.";
+            else videoGenerateButton.title = "Generate Video";
         }
     }
+    window.clearImageSelection = function() { // Make it global
+        if (imageUploadInput) imageUploadInput.value = null;
+        updateSharedImageState(''); // Pass empty string to clear
+    }
 
-
-    // --- Image Input Handling ---
-    if (imageUploadInput && sharedHiddenImageInput) { // Check for essential elements
+    // --- Image Input Listener (from Image Panel Upload) ---
+    if (imageUploadInput && sharedHiddenImageInput) {
         imageUploadInput.addEventListener('change', function(event) {
             const file = event.target.files[0];
             if (file && file.type.startsWith('image/')) {
                 const reader = new FileReader();
                 reader.onload = function(e) {
-                    const dataUrl = e.target.result;
-                    const base64String = dataUrl.split(',')[1]; // Get Base64 part
-                    if (base64String) {
-                        updateSharedImageState(base64String); // Update all inputs
-                    } else {
-                        console.error("Failed base64 extraction.");
-                        clearImageSelection(); // Clear everything if extraction fails
-                    }
+                    const base64String = e.target.result.split(',')[1];
+                    updateSharedImageState(base64String);
                 }
-                reader.onerror = function(err) { console.error("File read error:", err); clearImageSelection(); }
-                reader.readAsDataURL(file); // Read file as Data URL (Base64)
+                reader.onerror = function() { clearImageSelection(); }
+                reader.readAsDataURL(file);
             } else {
-                // Handle case where file is invalid or no file is selected after opening dialog
                 if(imageUploadInput.value) alert("Invalid file type. Please upload PNG, JPEG, or WEBP.");
                 clearImageSelection();
             }
         });
-    } else { console.warn("Image upload or shared state input element not found."); }
-
-    // --- Clear Image Listener ---
-    if (clearImageButton) {
-        clearImageButton.addEventListener('click', (e) => {
-             e.stopPropagation();
-             clearImageSelection();
-             if (imageUploadInput) imageUploadInput.value = ''; // Explicitly clear the file input element
-        });
     }
-
+    // --- Clear Image Button Listener ---
+    if (clearImageButton) { clearImageButton.addEventListener('click', (e) => { e.stopPropagation(); clearImageSelection(); }); }
     // --- Initial Image State Check on Load ---
-    // Check if there is an image already loaded from the server (via Flask template context)
     const initialBase64 = sharedHiddenImageInput?.value;
-    if (initialBase64) {
-        console.log("DEBUG: Initial image state found on page load.");
-        // If there's an initial image, populate all the form hidden inputs and update UI
-        updateSharedImageState(initialBase64);
-    } else {
-         console.log("DEBUG: No initial image state on page load.");
-         // Ensure UI is correctly showing no image state
-         clearImageSelection(); // Will set inputs to empty and hide previews/disable button
-    }
+    updateSharedImageState(initialBase64); // This will set up all previews and form inputs correctly
     // --- End Shared Image State Handling ---
 
 
     // **** Form Submission Loading Logic ****
-    // Attach submit listeners to forms to show indicators
-    const textForm = document.getElementById('text-prompt-form');
-    const textSubmitButton = document.getElementById('text-submit-button');
-    const textLoadingIndicator = document.getElementById('text-loading-indicator');
+    const forms = [
+        { formId: 'text-prompt-form', submitId: 'text-submit-button', indicatorId: 'text-loading-indicator' },
+        { formId: 'image-gen-form', submitId: 'image-submit-button', indicatorId: 'image-loading-indicator' },
+        { formId: 'audio-gen-form', submitId: 'audio-submit-button', indicatorId: 'audio-loading-indicator' },
+        { formId: 'video-gen-form', submitId: 'video-submit-button', indicatorId: 'video-loading-indicator' }
+    ];
 
-    const imageForm = document.getElementById('image-gen-form');
-    const imageSubmitButton = document.getElementById('image-submit-button');
-    const imageLoadingIndicator = document.getElementById('image-loading-indicator');
-
-    const audioForm = document.getElementById('audio-gen-form');
-    const audioSubmitButton = document.getElementById('audio-submit-button');
-    const audioLoadingIndicator = document.getElementById('audio-loading-indicator');
-
-    const videoForm = document.getElementById('video-gen-form');
-    const videoSubmitButton = document.getElementById('video-submit-button'); // Changed ID from generate-video-button
-    const videoLoadingIndicator = document.getElementById('video-loading-indicator');
-
-    // --- Universal Form Submit Handler ---
-    function handleFormSubmission(event, submitButton, loadingIndicator) {
-        // Only proceed if the button is NOT already disabled
+    function handleFormSubmission(event, submitButton, loadingIndicator, buttonTextElement) {
         if (submitButton && !submitButton.disabled) {
-            // Add temporary state update *before* Flask redirects
             if (submitButton) {
                 submitButton.disabled = true;
-                // Optionally change button appearance or text here
-                // submitButton.textContent = 'Processing...'; // Example text change
+                if(buttonTextElement) buttonTextElement.classList.add('hidden'); // Hide original text
             }
             if (loadingIndicator) {
-                loadingIndicator.classList.remove('hidden'); // Show the spinner
+                loadingIndicator.classList.remove('hidden'); // Show spinner
+                if(loadingIndicator.parentElement === submitButton) loadingIndicator.classList.add('inline-flex'); // If spinner is inside button
             }
-            
         } else if (submitButton && submitButton.disabled) {
-             // Prevent default submission if the button is already disabled
-             event.preventDefault();
+             event.preventDefault(); // Prevent re-submission if already processing
         }
-        // Otherwise, allow the default form submission which triggers the redirect
+        // Allow default form submission if not handled above
     }
 
-    // --- Attach Handlers ---
-    if(textForm && textSubmitButton && textLoadingIndicator) {
-        textForm.addEventListener('submit', (e) => handleFormSubmission(e, textSubmitButton, textLoadingIndicator));
-    }
-    if(imageForm && imageSubmitButton && imageLoadingIndicator) {
-        imageForm.addEventListener('submit', (e) => handleFormSubmission(e, imageSubmitButton, imageLoadingIndicator));
-    }
-    if(audioForm && audioSubmitButton && audioLoadingIndicator) {
-        audioForm.addEventListener('submit', (e) => handleFormSubmission(e, audioSubmitButton, audioLoadingIndicator));
-    }
-     // Changed to video-submit-button in HTML, update reference
-    const actualVideoSubmitButton = document.getElementById('video-submit-button');
-    if(videoForm && actualVideoSubmitButton && videoLoadingIndicator) {
-        videoForm.addEventListener('submit', (e) => handleFormSubmission(e, actualVideoSubmitButton, videoLoadingIndicator));
-    }
+    forms.forEach(f => {
+        const form = document.getElementById(f.formId);
+        const submitButton = document.getElementById(f.submitId);
+        const loadingIndicator = document.getElementById(f.indicatorId);
+        const buttonTextElement = submitButton ? submitButton.querySelector('.button-text') : null;
 
-    // CSS for the spinner (add this to your base.html's <head> or a CSS file)
-    
+        if (form && submitButton && loadingIndicator) {
+            form.addEventListener('submit', (e) => handleFormSubmission(e, submitButton, loadingIndicator, buttonTextElement));
+        } else {
+            console.warn(`Form submission elements not found for form ID: ${f.formId}`);
+        }
+    });
 
+    // Make text input button also show spinner inside
+    const textSubmitButton = document.getElementById('text-submit-button');
+    if (textSubmitButton) {
+        const textButtonText = textSubmitButton.querySelector('.button-text');
+        const textLoadingSpinner = textSubmitButton.querySelector('.loading-spinner');
+        textSubmitButton.form.addEventListener('submit', (e) => {
+            if (!textSubmitButton.disabled) {
+                if (textButtonText) textButtonText.classList.add('hidden');
+                if (textLoadingSpinner) textLoadingSpinner.classList.remove('hidden');
+            }
+        });
+    }
 
  });
 </script>

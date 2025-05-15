@@ -14,18 +14,28 @@
               primary: '#8338ec',
               'primary-dark': '#6a2bc4',
               // Added colors that match the panel toggle buttons and errors for spinner-small examples
-              'purple-700': '#7e22ce',
-              'teal-700': '#0d9488',
-              'blue-700': '#1d4ed8',
-              'red-800': '#b91c1c'
+              'purple-700': '#7e22ce', // Example for image spinner
+              'teal-700': '#0d9488',   // Example for audio spinner
+              'blue-700': '#1d4ed8',   // Example for video spinner
+              'red-800': '#b91c1c',
+              'slate-100': '#f1f5f9',
+              'slate-200': '#e2e8f0',
+              'slate-300': '#cbd5e1',
+              'slate-400': '#94a3b8',
+              'slate-500': '#64748b',
+              'slate-600': '#475569',
+              'slate-700': '#334155',
+              'slate-800': '#1e293b',
+              'indigo-50': '#eef2ff', // For mobile menu active
+              'indigo-100': '#e0e7ff', // For desktop sidebar active
             }
           }
         }
       }
     </script>
-    <title>{% block title %}Home{% endblock %} - MarketMind</title>
+    <title>{% block title %}Home{% endblock %} - MarketMind AI</title>
 
-    {# --- ADDED: CSS for Loading Spinners --- #}
+    {# --- CSS for Loading Spinners and Scrollbar --- #}
     <style>
         /* Ensure HTML and Body take full height for flex column layout */
         html, body { height: 100%; }
@@ -42,13 +52,13 @@
           100% { transform: rotate(360deg); }
         }
 
-        /* --- Default Spinner Style --- */
+        /* --- Default Spinner Style (for panel submit buttons) --- */
         .spinner {
             border: 4px solid rgba(0, 0, 0, 0.1); /* Light gray border */
-            width: 24px; /* Size of the spinner */
-            height: 24px;
+            width: 20px; /* Size of the spinner */
+            height: 20px;
             border-radius: 50%; /* Makes it circular */
-            border-left-color: #6b46c1; /* Primary color for the moving part */
+            border-left-color: #ffffff; /* White for visibility on colored buttons */
             animation: spin 1s ease infinite; /* Apply the animation */
         }
 
@@ -58,19 +68,18 @@
             width: 16px; /* Smaller size */
             height: 16px;
             border-radius: 50%;
-            border-left-color: #4f46e5; /* Example different color (or use primary) */
+            border-left-color: #ffffff; /* Primary color */
             animation: spin 1s ease infinite;
          }
 
-         /* Example of custom spinner color classes if needed (matching button hover colors) */
-         .spinner-purple { border-left-color: #9333ea; } /* hover:text-purple-600 */
-         .spinner-teal { border-left-color: #14b8a6; }   /* hover:text-teal-600 */
-         .spinner-blue { border-left-color: #3b82f6; }   /* hover:text-blue-600 */
-         /* You would need to add classes like 'spinner-purple' to your loading indicator div if you want color-specific spinners */
-
+         /* You can add color-specific spinner classes if you want the spinner border-left-color to match button colors */
+          .spinner.spinner-purple { border-left-color: #ecd9fc; } 
+          .spinner.spinner-teal   { border-left-color: #c4fffa; } 
+          .spinner.spinner-blue   { border-left-color: #a8bdf4; } 
     </style>
-    {# --- END ADDED Spinner CSS --- #}
+    {# --- END ADDED CSS --- #}
 
+    {% block head_extra %}{% endblock %} {# For page-specific head elements #}
 </head>
 {# Body is the main flex container, ensuring it takes at least screen height #}
 <body class="bg-gray-50 flex flex-col min-h-screen">
@@ -81,17 +90,12 @@
             <div class="flex justify-between items-center">
                 <!-- Logo/Brand -->
                 <div>
-                    <a href="/" class="text-2xl font-bold text-primary">MarketMind</a>
+                    <a href="{{ url_for('views.home') }}" class="text-2xl font-bold text-primary">MarketMind AI</a>
                 </div>
                 <!-- Desktop Menu -->
                 <div class="hidden md:flex items-center space-x-4">
                     {% if user.is_authenticated %}
-                        <a href="{{ url_for('views.dashboard') }}" class="px-3 py-2 rounded-md text-sm font-medium {% if request.endpoint == 'views.dashboard' %} text-primary font-semibold {% else %} text-gray-700 hover:bg-gray-100 hover:text-gray-900 {% endif %}">Dashboard</a>
                         <a href="{{ url_for('auth.logout') }}" class="px-4 py-2 rounded-md bg-primary text-white hover:bg-primary-dark transition text-sm font-medium">Logout</a>
-                    {% else %}
-                         <a href="{{ url_for('views.home') }}" class="px-3 py-2 rounded-md text-sm font-medium text-gray-700 hover:bg-gray-100 hover:text-gray-900">Home</a>
-                        <a href="{{ url_for('auth.login') }}" class="px-4 py-2 rounded-md bg-primary text-white hover:bg-primary-dark transition text-sm font-medium">Login</a>
-                        <a href="{{ url_for('auth.sign_up') }}" class="px-4 py-2 rounded-md bg-primary text-white hover:bg-primary-dark transition text-sm font-medium">Sign Up</a>
                     {% endif %}
                 </div>
                 <!-- Mobile menu button -->
@@ -109,17 +113,13 @@
                     <a href="{{ url_for('views.dashboard') }}" class="block px-3 py-2 rounded-md font-medium {% if request.endpoint == 'views.dashboard' %} text-primary bg-indigo-50 {% else %} text-gray-700 hover:bg-gray-100 hover:text-gray-900 {% endif %}">Dashboard</a>
                     <a href="{{ url_for('auth.logout') }}" class="block w-full text-left px-3 py-2 mt-2 rounded-md bg-primary text-white hover:bg-primary-dark">Logout</a>
                 {% else %}
-                    <a href="{{ url_for('views.home') }}" class="block px-3 py-2 rounded-md text-gray-700 hover:bg-gray-100 hover:text-gray-900">Home</a>
+                    <a href="{{ url_for('views.home') }}" class="block px-3 py-2 rounded-md text-gray-700 hover:bg-gray-100 hover:text-gray-900 {% if request.endpoint == 'views.home' %}text-primary bg-indigo-50{% endif %}">Home</a>
                     <a href="{{ url_for('auth.login') }}" class="block w-full text-left px-3 py-2 mt-2 rounded-md bg-primary text-white hover:bg-primary-dark">Login</a>
                     <a href="{{ url_for('auth.sign_up') }}" class="block w-full text-left px-3 py-2 mt-2 rounded-md bg-primary text-white hover:bg-primary-dark">Sign Up</a>
                 {% endif %}
             </div>
         </div>
     </nav>
-
-    {# Flash messages: Fixed height #}
-    {# The redirect logic and re-rendering naturally show messages on the next page load #}
-    {# No change needed here #}
 
     {# Main content area wrapper #}
     {# flex-grow: Takes remaining vertical space #}
@@ -128,11 +128,12 @@
     {# overflow-hidden: CRITICAL - Prevents this container itself from scrolling and ensures inner div handles scroll #}
     <main id="main-content" class="flex-grow flex flex-col relative overflow-hidden">
          {% block content %}
-            {# Default content for pages NOT overriding this block #}
-            {# This div ensures the content is centered and padded like typical page content #}
-            <div class="max-w-6xl w-full mx-auto px-4 py-8">
-                <p>Default Content Area - Override 'content' block in child templates.</p>
-                <p>This area scrolls normally within the page.</p>
+            {# Default content for pages NOT overriding this block (e.g., simple home page) #}
+            <div class="max-w-6xl w-full mx-auto px-4 py-8 flex-grow flex items-center justify-center">
+                <div class="text-center">
+                    <h1 class="text-4xl font-bold text-primary mb-4">Welcome to MarketMind AI</h1>
+                    <p class="text-xl text-slate-600">Your intelligent partner for marketing success.</p>
+                </div>
             </div>
          {% endblock %}
     </main>
@@ -145,6 +146,7 @@
             menuButton.addEventListener('click', function() {
                 menu.classList.toggle('hidden');
             });
+            // Optional: Close mobile menu when clicking outside (if not clicking menu button itself)
             document.addEventListener('click', function(event) {
                 const isClickInsideNav = menuButton.contains(event.target) || menu.contains(event.target);
                 if (!isClickInsideNav && !menu.classList.contains('hidden')) {

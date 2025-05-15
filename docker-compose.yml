@@ -74,18 +74,18 @@ services:
       - "${WEBUI_PORT:-7860}:7860"
     build: ./services/AUTOMATIC1111/ # Assuming this build context exists
     environment:
-      - CLI_ARGS=--allow-code --medvram --xformers --enable-insecure-extension-access --api --listen
+      - CLI_ARGS=--allow-code --medvram --xformers --enable-insecure-extension-access --api --listen --port 7860
 
   # --- AUTOMATIC1111 CPU Service (ALTERNATIVE) ---
   auto-cpu:
     <<: *automatic # Inherits basic settings
     container_name: automatic1111_cpu
     ports: # Needs its own port mapping if run simultaneously, or use profiles
-      - "7861:7860" # Example: Expose on different host port if needed
+      - "7860:7860" # Example: Expose on different host port if needed
     profiles: ["auto-cpu"]       # Keep Profile - Run explicitly
     deploy: {} # Override deploy to remove GPU allocation
     environment:
-      - CLI_ARGS=--no-half --precision full --use-cpu all --skip-torch-cuda-test --allow-code --enable-insecure-extension-access --api --listen
+      - CLI_ARGS=--no-half --precision full --use-cpu all --skip-torch-cuda-test --allow-code --enable-insecure-extension-access --api --listen --port 7860
 
   # --- ComfyUI GPU Service (VIDEO GENERATION) ---
   comfy: &comfy
